@@ -35,7 +35,7 @@ with st.sidebar:
     min_ev = st.slider("Min. EV %", 1, 25, 5, 1)
     kelly_fraction = st.slider("Kelly Fraction", 0.1, 0.5, 0.25, 0.05)
     st.markdown("---")
-    st.caption("v4.2 · Only Solutions Inc.")
+    st.caption("v4.3 · Only Solutions Inc.")
 
 # ─────────────────────────────────────────────────────────────
 # DEEPSEEK AI FUNCTION
@@ -677,7 +677,7 @@ with tab5:
         st.markdown("---")
         st.subheader("✏️ Update Bet Result")
         
-        # Get pending bets safely
+        # Get pending bets safely using a separate method
         pending_bets = []
         for b in bets:
             if len(b) > 12 and b[12] == 'Pending':
@@ -690,10 +690,10 @@ with tab5:
                 })
         
         if pending_bets:
-            bet_options = [b['label'] for b in pending_bets]
-            selected_label = st.selectbox("Select Bet to Update", bet_options)
-            # Extract the ID from the selected label
-            selected_id = int(selected_label.split()[1])
+            # Use a dictionary to map display labels to IDs
+            bet_options = {b['label']: b['id'] for b in pending_bets}
+            selected_label = st.selectbox("Select Bet to Update", list(bet_options.keys()))
+            selected_id = bet_options[selected_label]  # Direct lookup instead of splitting
             
             result = st.selectbox("Result", ["Win", "Loss"])
             return_amount = st.number_input("Return Amount ($)", min_value=0.0, step=0.01)
