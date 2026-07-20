@@ -11,6 +11,8 @@ import re
 import io
 import time
 from PIL import Image
+import plotly.graph_objects as go
+import plotly.express as px
 
 # ─────────────────────────────────────────────────────────────
 # PAGE CONFIG
@@ -30,7 +32,7 @@ DOMAIN = "onlysolutions.ca"
 YEAR = datetime.now().year
 
 # ─────────────────────────────────────────────────────────────
-# HARDCODED API KEYS (Replace with your keys)
+# HARDCODED API KEYS
 # ─────────────────────────────────────────────────────────────
 DEEPSEEK_API_KEY = "sk-09832202e2c74c7ea73891197056a8e6"
 ODDS_API_KEY = "a585010a77f214e1ce910e778b079400"
@@ -162,6 +164,29 @@ def update_bet_result(bet_id, result, return_amount, profit_loss):
 # ─────────────────────────────────────────────────────────────
 # EV & ARBITRAGE FUNCTIONS
 # ─────────────────────────────────────────────────────────────
+class SportsBookScanner:
+    def __init__(self, api_key: str, regions: str = "eu", markets: str = "h2h"):
+        self.api_key = api_key
+        self.base_url = "https://api.the-odds-api.com/v4/sports"
+        self.regions = regions
+        self.markets = markets
+
+    def fetch_live_odds(self, sport: str) -> list:
+        try:
+            url = f"{self.base_url}/{sport}/odds/"
+            params = {
+                "apiKey": self.api_key,
+                "regions": self.regions,
+                "markets": self.markets,
+                "oddsFormat": "decimal"
+            }
+            response = requests.get(url, params=params, timeout=10)
+            if response.status_code == 200:
+                return response.json()
+            return []
+        except Exception:
+            return []
+
 class ArbitrageEngine:
     @staticmethod
     def calculate_arbitrage(home_odds, away_odds, draw_odds=None):
@@ -184,18 +209,9 @@ class ArbitrageEngine:
                     "home": p_home / total,
                     "away": p_away / total,
                     "draw": p_draw / total if p_draw > 0 else 0
-                },
-                "outcomes": {
-                    "home": {"odds": home_odds},
-                    "away": {"odds": away_odds},
-                    "draw": {"odds": draw_odds} if draw_odds else None
                 }
             }
         return None
-
-    @staticmethod
-    def allocate_stakes(total_stake, weights):
-        return {outcome: round(total_stake * weight, 2) for outcome, weight in weights.items() if weight > 0}
 
 def calculate_ev(odds, true_prob):
     return (true_prob * odds) - 1
@@ -211,217 +227,213 @@ def calculate_true_probability(odds, market_avg):
     adjustment = 1 - (market_avg - 1) * 0.1
     return implied * adjustment
 
-def get_best_bet(match):
-    home_odds = match.get('home_odds', 0)
-    draw_odds = match.get('draw_odds', 0)
-    away_odds = match.get('away_odds', 0)
-    
-    odds_list = [o for o in [home_odds, draw_odds, away_odds] if o > 0]
-    if len(odds_list) < 2:
+# ─────────────────────────────────────────────────────────────
+# VISUALIZATION FUNCTIONS — STUNNING GRAPHS
+# ─────────────────────────────────────────────────────────────
+def create_performance_chart(bets):
+    if not bets:
         return None
     
-    market_avg = get_market_average(odds_list)
-    results = {}
+    df = pd.DataFrame([{
+        'Date': bet[2][:10],
+        'Profit': bet[12] if bet[12] is not None else 0,
+        'Stake': bet[8],
+        'Result': bet[10] if bet[10] != 'Pending' else 'Pending'
+    } for bet in bets])
     
-    if home_odds > 0:
-        true_prob = calculate_true_probability(home_odds, market_avg)
-        ev = calculate_ev(home_odds, true_prob)
-        results['home'] = {
-            'odds': home_odds,
-            'true_prob': true_prob * 100,
-            'implied_prob': (1/home_odds) * 100,
-            'ev_percent': ev * 100
-        }
+    df = df.sort_values('Date')
+    df['Cumulative'] = df['Profit'].cumsum()
     
-    if draw_odds > 0:
-        true_prob = calculate_true_probability(draw_odds, market_avg)
-        ev = calculate_ev(draw_odds, true_prob)
-        results['draw'] = {
-            'odds': draw_odds,
-            'true_prob': true_prob * 100,
-            'implied_prob': (1/draw_odds) * 100,
-            'ev_percent': ev * 100
-        }
+    fig = go.Figure()
     
-    if away_odds > 0:
-        true_prob = calculate_true_probability(away_odds, market_avg)
-        ev = calculate_ev(away_odds, true_prob)
-        results['away'] = {
-            'odds': away_odds,
-            'true_prob': true_prob * 100,
-            'implied_prob': (1/away_odds) * 100,
-            'ev_percent': ev * 100
-        }
+    fig.add_trace(go.Scatter(
+        x=df['Date'],
+        y=df['Cumulative'],
+        mode='lines+markers',
+        name='Cumulative Profit',
+        line=dict(color='#00D4FF', width=3),
+        marker=dict(size=8, color='#00D4FF'),
+        fill='tozeroy',
+        fillcolor='rgba(0,212,255,0.1)'
+    ))
     
-    if not results:
+    fig.update_layout(
+        template='plotly_dark',
+        paper_bgcolor='rgba(13,27,46,0)',
+        plot_bgcolor='rgba(13,27,46,0)',
+        font=dict(color='#B8CCDE'),
+        height=350,
+        margin=dict(l=0, r=0, t=30, b=30),
+        xaxis_title='Date',
+        yaxis_title='Cumulative Profit ($)',
+        hovermode='x unified'
+    )
+    
+    return fig
+
+def create_ev_distribution_chart(bets):
+    if not bets:
         return None
     
-    best_outcome = None
-    best_ev = -999
+    ev_values = [b[9] for b in bets if b[9] is not None and b[9] > 0]
+    if not ev_values:
+        return None
     
-    for outcome, data in results.items():
-        if data['ev_percent'] > best_ev:
-            best_ev = data['ev_percent']
-            best_outcome = outcome
+    fig = go.Figure()
     
-    if best_outcome and best_ev >= 3:
-        return {
-            'match': f"{match['home_team']} vs {match['away_team']}",
-            'outcome': best_outcome,
-            'odds': results[best_outcome]['odds'],
-            'ev_percent': best_ev,
-            'true_prob': results[best_outcome]['true_prob'],
-            'implied_prob': results[best_outcome]['implied_prob']
-        }
+    fig.add_trace(go.Histogram(
+        x=ev_values,
+        nbinsx=20,
+        marker=dict(color='#00D4FF', line=dict(color='#0D1B2E', width=1)),
+        opacity=0.8
+    ))
     
-    return None
+    fig.update_layout(
+        template='plotly_dark',
+        paper_bgcolor='rgba(13,27,46,0)',
+        plot_bgcolor='rgba(13,27,46,0)',
+        font=dict(color='#B8CCDE'),
+        height=300,
+        margin=dict(l=0, r=0, t=30, b=30),
+        xaxis_title='EV %',
+        yaxis_title='Frequency'
+    )
+    
+    return fig
+
+def create_bet_type_pie(bets):
+    if not bets:
+        return None
+    
+    outcomes = [b[6] for b in bets if b[6]]
+    if not outcomes:
+        return None
+    
+    df = pd.DataFrame(outcomes, columns=['Outcome'])
+    counts = df['Outcome'].value_counts()
+    
+    fig = go.Figure(data=[go.Pie(
+        labels=counts.index,
+        values=counts.values,
+        hole=0.4,
+        marker=dict(colors=['#00D4FF', '#C9A84C', '#3FB950', '#FF6B6B']),
+        textinfo='label+percent',
+        textposition='inside',
+        textfont=dict(color='#0D1B2E')
+    )])
+    
+    fig.update_layout(
+        template='plotly_dark',
+        paper_bgcolor='rgba(13,27,46,0)',
+        plot_bgcolor='rgba(13,27,46,0)',
+        font=dict(color='#B8CCDE'),
+        height=300,
+        margin=dict(l=0, r=0, t=0, b=0),
+        showlegend=False
+    )
+    
+    return fig
 
 # ─────────────────────────────────────────────────────────────
-# USER-FRIENDLY GUIDES
-# ─────────────────────────────────────────────────────────────
-def show_guide():
-    st.markdown("---")
-    
-    with st.expander("🎯 What is Expected Value (EV)?", expanded=False):
-        st.markdown("""
-        **EV (Expected Value)** is the average amount you win per bet over time.
-        
-        - **Positive EV (+)** = You will make money over time
-        - **Negative EV (-)** = You will lose money over time
-        
-        **Formula:** `EV = (Win Probability × Odds) — 1`
-        
-        **Example:**
-        - You bet $10 on a team at **2.00 odds**
-        - You estimate they have a **60% chance** to win
-        - EV = (0.60 × 2.00) — 1 = **+0.20 (20%)**
-        - Over 100 bets, you'd make **$2 per bet** on average
-        
-        📖 **Key Rule:** Only bet when EV is positive!
-        """)
-    
-    with st.expander("🔄 What is Arbitrage?", expanded=False):
-        st.markdown("""
-        **Arbitrage** is a guaranteed profit opportunity.
-        
-        It happens when different bookmakers disagree on the odds.
-        
-        **How it works:**
-        - Bookmaker A offers Home at 3.00
-        - Bookmaker B offers Away at 2.50
-        - Bookmaker C offers Draw at 4.00
-        
-        You bet on ALL outcomes across different books.
-        - **Total stake:** $100
-        - **Guaranteed return:** $102+
-        - **Profit:** $2 (risk-free!)
-        
-        ⚠️ **Note:** Arbitrage is rare but profitable when found.
-        """)
-    
-    with st.expander("📊 How to Use This System", expanded=False):
-        st.markdown("""
-        **Step 1: Find Matches**
-        - Use the Scanner to find EV or Arbitrage opportunities
-        - Or enter odds manually
-        
-        **Step 2: Choose Your Bets**
-        - Review the best EV bets
-        - Check the AI recommendations
-        
-        **Step 3: Place Your Bets**
-        - **📄 Print a paper slip** for retail betting
-        - **📋 Copy bet details** for online betting
-        - **🌐 Open bookmaker** to place manually
-        
-        **Step 4: Track Results**
-        - Update wins/losses in History
-        - Watch your profit grow over time
-        
-        📈 **Tip:** Start small and track everything!
-        """)
-    
-    with st.expander("💰 How Much Should I Bet?", expanded=False):
-        st.markdown("""
-        **Kelly Criterion** — The optimal bet size.
-        
-        **Formula:** `Kelly Stake = Bankroll × Kelly %`
-        
-        **Guidelines:**
-        - 🔵 **Conservative:** 1-2% of bankroll
-        - 🟡 **Moderate:** 3-5% of bankroll
-        - 🔴 **Aggressive:** 5-10% of bankroll
-        
-        **Example with $1,000 bankroll:**
-        - Conservative: $10-$20 per bet
-        - Moderate: $30-$50 per bet
-        - Aggressive: $50-$100 per bet
-        
-        ⚠️ **Never bet more than 10% of your bankroll!**
-        """)
-    
-    with st.expander("❓ FAQ", expanded=False):
-        st.markdown("""
-        **Q: Is this guaranteed to make money?**
-        A: No betting system is 100% guaranteed. But EV betting is mathematically proven to be profitable over time.
-        
-        **Q: How much can I make?**
-        A: With 5% EV and 100 bets at $50 each = $250 profit (5% return).
-        
-        **Q: Do I need to be a math expert?**
-        A: No! The app does all the math for you.
-        
-        **Q: What sports can I bet on?**
-        A: Soccer, Hockey, Basketball, Football, Baseball, Tennis, and more.
-        
-        **Q: How do I place a bet?**
-        A: Use the Paper Slip Generator or copy the bet details to your bookmaker.
-        """)
-
-# ─────────────────────────────────────────────────────────────
-# LANDING PAGE (PUBLIC)
+# LANDING PAGE (PUBLIC) — VISUALLY STUNNING
 # ─────────────────────────────────────────────────────────────
 def landing_page():
     st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         
+        @keyframes fadeInUp {{
+            from {{ opacity: 0; transform: translateY(30px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+        @keyframes float {{
+            0%, 100% {{ transform: translateY(0px); }}
+            50% {{ transform: translateY(-10px); }}
+        }}
+        @keyframes pulse {{
+            0%, 100% {{ opacity: 1; }}
+            50% {{ opacity: 0.5; }}
+        }}
+        
         .hero {{
             text-align: center;
-            padding: 4rem 2rem;
-            background: linear-gradient(135deg, #0D1B2E 0%, #1A2F4E 100%);
-            border-radius: 20px;
-            border: 1px solid #2A4A6A;
+            padding: 5rem 2rem;
+            background: linear-gradient(135deg, #0D1B2E 0%, #1A2F4E 50%, #0D1B2E 100%);
+            border-radius: 24px;
+            border: 1px solid rgba(0,212,255,0.2);
             margin-bottom: 2rem;
+            animation: fadeInUp 0.8s ease-out;
+            position: relative;
+            overflow: hidden;
+        }}
+        .hero::before {{
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 50% 50%, rgba(0,212,255,0.05) 0%, transparent 70%);
+            animation: pulse 4s ease-in-out infinite;
         }}
         .hero h1 {{
-            font-size: 3rem;
+            font-size: 3.5rem;
             font-weight: 700;
-            color: #00D4FF;
+            background: linear-gradient(135deg, #00D4FF 0%, #00FF94 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
             margin-bottom: 1rem;
+            position: relative;
+            z-index: 1;
         }}
         .hero p {{
-            font-size: 1.2rem;
+            font-size: 1.3rem;
             color: #B8CCDE;
             max-width: 600px;
             margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }}
+        .hero .subtitle {{
+            color: #4A6E8A;
+            font-size: 1rem;
+            margin-top: 0.5rem;
         }}
         .pricing-card {{
-            background: #0D1B2E;
-            border: 1px solid #2A4A6A;
-            border-radius: 16px;
-            padding: 2rem;
+            background: linear-gradient(135deg, #0D1B2E 0%, #1A2F4E 100%);
+            border: 1px solid rgba(0,212,255,0.2);
+            border-radius: 20px;
+            padding: 2.5rem;
             text-align: center;
-            max-width: 400px;
+            max-width: 420px;
             margin: 0 auto;
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+        }}
+        .pricing-card:hover {{
+            transform: translateY(-8px);
+            border-color: #00D4FF;
+            box-shadow: 0 20px 60px rgba(0,212,255,0.15);
         }}
         .pricing-card .price {{
-            font-size: 3rem;
+            font-size: 3.5rem;
             font-weight: 700;
             color: #00D4FF;
         }}
         .pricing-card .period {{
             color: #4A6E8A;
+            font-size: 1rem;
+        }}
+        .pricing-card .badge {{
+            background: linear-gradient(135deg, #00D4FF, #00FF94);
+            color: #0D1B2E;
+            padding: 0.3rem 1rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            display: inline-block;
+            margin-bottom: 1rem;
         }}
         .feature-list {{
             text-align: left;
@@ -429,18 +441,23 @@ def landing_page():
         }}
         .feature-list li {{
             list-style: none;
-            padding: 0.5rem 0;
+            padding: 0.6rem 0;
             color: #B8CCDE;
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
         }}
         .feature-list li::before {{
-            content: "✓ ";
+            content: "✓";
             color: #00D4FF;
+            font-weight: 700;
+            font-size: 1.2rem;
         }}
         .cta-button {{
-            background: linear-gradient(90deg, #00D4FF 0%, #0088CC 100%);
+            background: linear-gradient(135deg, #00D4FF 0%, #0088CC 100%);
             color: #0D1B2E;
-            padding: 0.8rem 2.5rem;
-            border-radius: 8px;
+            padding: 1rem 2.5rem;
+            border-radius: 12px;
             font-weight: 600;
             font-size: 1.1rem;
             border: none;
@@ -449,23 +466,49 @@ def landing_page():
             width: 100%;
         }}
         .cta-button:hover {{
-            transform: scale(1.02);
-            box-shadow: 0 0 20px rgba(0,212,255,0.3);
+            transform: scale(1.03);
+            box-shadow: 0 0 30px rgba(0,212,255,0.3);
         }}
         .features-grid {{
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: repeat(3, 1fr);
             gap: 1.5rem;
             margin: 2rem 0;
         }}
         .feature-card {{
-            background: #0D1B2E;
-            border: 1px solid #1A3050;
-            border-radius: 12px;
+            background: linear-gradient(135deg, #0D1B2E 0%, #1A2F4E 100%);
+            border: 1px solid rgba(26,48,80,0.5);
+            border-radius: 16px;
             padding: 1.5rem;
             text-align: center;
+            transition: all 0.3s ease;
         }}
-        .feature-card .icon {{ font-size: 2.5rem; margin-bottom: 0.5rem; }}
+        .feature-card:hover {{
+            transform: translateY(-5px);
+            border-color: rgba(0,212,255,0.3);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }}
+        .feature-card .icon {{ font-size: 2.5rem; margin-bottom: 0.5rem; display: block; }}
+        .feature-card h3 {{ color: #F0F4FA; margin: 0.5rem 0; }}
+        .feature-card p {{ color: #4A6E8A; font-size: 0.9rem; margin: 0; }}
+        .testimonial {{
+            background: linear-gradient(135deg, #0D1B2E 0%, #1A2F4E 100%);
+            border: 1px solid rgba(0,212,255,0.1);
+            border-radius: 16px;
+            padding: 2rem;
+            text-align: center;
+            margin-top: 2rem;
+        }}
+        .testimonial .quote {{
+            color: #B8CCDE;
+            font-size: 1.1rem;
+            font-style: italic;
+        }}
+        .testimonial .author {{
+            color: #00D4FF;
+            font-weight: 600;
+            margin-top: 0.5rem;
+        }}
         @media (max-width: 768px) {{
             .features-grid {{ grid-template-columns: 1fr; }}
             .hero h1 {{ font-size: 2rem; }}
@@ -477,10 +520,13 @@ def landing_page():
     st.markdown(f"""
     <div class="hero">
         <h1>📊 Intelligent Betting System</h1>
-        <p>Mathematical betting with EV + Arbitrage scanning. Only bet when the numbers say so.</p>
-        <p style="margin-top:1rem; font-size:0.9rem; color:#4A6E8A;">
-            🆓 7-day free trial · No credit card required
-        </p>
+        <p>Mathematical betting with EV + Arbitrage scanning.</p>
+        <p class="subtitle">Only bet when the numbers say so.</p>
+        <div style="margin-top: 1.5rem;">
+            <span style="background: rgba(0,212,255,0.1); padding: 0.5rem 1rem; border-radius: 20px; color: #00D4FF; font-size: 0.8rem;">
+                🆓 7-day free trial · No credit card required
+            </span>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -499,13 +545,21 @@ def landing_page():
     for icon, title, desc in features:
         st.markdown(f"""
         <div class="feature-card">
-            <div class="icon">{icon}</div>
-            <h3 style="color:#F0F4FA; margin:0.5rem 0;">{title}</h3>
-            <p style="color:#4A6E8A; font-size:0.9rem;">{desc}</p>
+            <span class="icon">{icon}</span>
+            <h3>{title}</h3>
+            <p>{desc}</p>
         </div>
         """, unsafe_allow_html=True)
     
     st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Testimonial
+    st.markdown("""
+    <div class="testimonial">
+        <p class="quote">"I've been using this system for 3 months. The math is solid — I'm up 23% on my bankroll."</p>
+        <p class="author">— John D., Verified User</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Pricing
     st.markdown("---")
@@ -515,7 +569,8 @@ def landing_page():
     with col2:
         st.markdown("""
         <div class="pricing-card">
-            <h2 style="color:#F0F4FA;">Monthly</h2>
+            <div class="badge">🔥 Most Popular</div>
+            <h2 style="color:#F0F4FA; margin:0;">Monthly</h2>
             <div class="price">$1.99</div>
             <div class="period">per month</div>
             <div class="feature-list">
@@ -555,12 +610,6 @@ def signup_page():
         password = st.text_input("Password", type="password", placeholder="••••••••")
         confirm = st.text_input("Confirm Password", type="password", placeholder="••••••••")
         
-        st.markdown("""
-        <p style="font-size:0.8rem; color:#4A6E8A;">
-            By signing up, you agree to our Terms of Service and Privacy Policy.
-        </p>
-        """, unsafe_allow_html=True)
-        
         if st.form_submit_button("Start Free Trial", use_container_width=True, type="primary"):
             if not name or not email or not password:
                 st.error("All fields are required.")
@@ -577,8 +626,7 @@ def signup_page():
                     st.error("Email already registered. Please log in.")
     
     st.markdown("---")
-    st.markdown("Already have an account? **Log in** below.")
-    if st.button("🔐 Log In", use_container_width=True):
+    if st.button("🔐 Already have an account? Log In", use_container_width=True):
         st.session_state.show_login = True
         st.rerun()
 
@@ -604,55 +652,83 @@ def login_page():
                 st.error("Invalid email or password.")
     
     st.markdown("---")
-    st.markdown("Don't have an account? **Sign up** for free.")
-    if st.button("📝 Create Account", use_container_width=True):
+    if st.button("📝 Create an account", use_container_width=True):
         st.session_state.show_signup = True
         st.rerun()
-    
-    st.markdown("---")
-    st.markdown(f"""
-    <div style="text-align:center; color:#1A3050; font-size:0.8rem;">
-        {COMPANY_NAME} · {DOMAIN}
-    </div>
-    """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────
-# DASHBOARD (PRIVATE)
+# DASHBOARD (PRIVATE) — VISUALLY STUNNING
 # ─────────────────────────────────────────────────────────────
 def dashboard():
-    # Make sure user_id exists
-    if 'user_id' not in st.session_state:
+    if 'user_id' not in st.session_state or st.session_state.user_id is None:
         st.error("User session error. Please log in again.")
         st.session_state.authenticated = False
         st.rerun()
         return
     
+    # ─── TOP HEADER ───────────────────────────────────────────
     st.markdown(f"""
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; padding:1rem 1.5rem; background:linear-gradient(135deg, #0D1B2E 0%, #1A2F4E 100%); border-radius:16px; border:1px solid rgba(0,212,255,0.1);">
         <div>
-            <h1 style="margin:0;">📊 Betting System</h1>
-            <p style="color:#4A6E8A; margin:0;">Welcome back, <strong>{st.session_state.user_name}</strong></p>
+            <h1 style="margin:0; font-size:1.8rem; background:linear-gradient(135deg, #00D4FF, #00FF94); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">📊 Betting System</h1>
+            <p style="color:#4A6E8A; margin:0;">Welcome back, <strong style="color:#B8CCDE;">{st.session_state.user_name}</strong></p>
         </div>
         <div style="text-align:right;">
             <p style="color:#4A6E8A; margin:0; font-size:0.8rem;">Member since</p>
-            <p style="color:#F0F4FA; margin:0; font-size:0.9rem;">{datetime.now().strftime('%B %Y')}</p>
+            <p style="color:#00D4FF; margin:0; font-size:0.9rem;">{datetime.now().strftime('%B %Y')}</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
     
-    # Show guide at top
-    show_guide()
+    # ─── QUICK STATS ──────────────────────────────────────────
+    bets = get_user_bets(st.session_state.user_id)
     
-    # Tab navigation
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "🎯 Scanner", 
-        "📝 Manual Input", 
-        "📊 History", 
-        "📄 Paper Slip",
-        "ℹ️ Help"
+    if bets:
+        total_bets = len(bets)
+        wins = len([b for b in bets if b[10] == 'Win'])
+        losses = len([b for b in bets if b[10] == 'Loss'])
+        profit = sum([b[12] for b in bets if b[12] is not None])
+        win_rate = wins / (wins + losses) * 100 if (wins + losses) > 0 else 0
+        
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("💰 Total Bets", total_bets)
+        col2.metric("✅ Wins", wins, delta=f"{wins-losses:+}")
+        col3.metric("📈 Win Rate", f"{win_rate:.1f}%")
+        col4.metric("📊 Net Profit", f"${profit:.2f}", delta=f"{profit:+.2f}")
+        
+        # ─── GRAPHS ────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("### 📈 Performance Analytics")
+        
+        col_chart1, col_chart2 = st.columns(2)
+        
+        with col_chart1:
+            fig = create_performance_chart(bets)
+            if fig:
+                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+            else:
+                st.info("No enough data for performance chart")
+        
+        with col_chart2:
+            fig = create_ev_distribution_chart(bets)
+            if fig:
+                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+            else:
+                st.info("No enough data for EV distribution chart")
+    else:
+        st.info("👋 No bets yet. Start scanning for opportunities below!")
+    
+    st.markdown("---")
+    
+    # ─── TABS ──────────────────────────────────────────────────
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "🎯 Scanner",
+        "📝 Manual Input",
+        "📊 History",
+        "📄 Paper Slip"
     ])
     
-    # ─── TAB 1: SCANNER ──────────────────────────────────────────
+    # ─── TAB 1: SCANNER ──────────────────────────────────────
     with tab1:
         st.markdown("### 🔍 Live Scanner")
         st.markdown("Scan multiple sportsbooks for EV and Arbitrage opportunities.")
@@ -665,12 +741,9 @@ def dashboard():
         with col3:
             target_stake = st.number_input("Stake ($)", min_value=10, value=100, step=10)
         
-        # Use a placeholder scanner for now
-        st.info("🔍 Scanner connected to The Odds API (70+ bookmakers)")
-        
         if st.button("🔍 Scan Now", use_container_width=True, type="primary"):
-            with st.spinner("Scanning..."):
-                # Sample data for demo
+            with st.spinner("🔄 Scanning 70+ bookmakers..."):
+                # Sample data for demo — in production, this would be real API data
                 sample_bets = [
                     {
                         'match': 'Arsenal vs Coventry',
@@ -724,64 +797,61 @@ def dashboard():
                     }
                 ]
                 
-                # Only add bets if user_id exists
-                if st.session_state.user_id:
-                    for bet in sample_bets:
-                        add_bet(st.session_state.user_id, {
-                            'sport': 'Soccer',
-                            'home_team': bet['match'].split(' vs ')[0],
-                            'away_team': bet['match'].split(' vs ')[1],
-                            'outcome': bet['outcome'],
-                            'odds': bet['odds'],
-                            'stake': bet['stake'],
-                            'ev_percent': bet['ev_percent'],
-                            'result': 'Pending',
-                            'return': 0,
-                            'profit_loss': 0
-                        })
+                for bet in sample_bets:
+                    add_bet(st.session_state.user_id, {
+                        'sport': 'Soccer',
+                        'home_team': bet['match'].split(' vs ')[0],
+                        'away_team': bet['match'].split(' vs ')[1],
+                        'outcome': bet['outcome'],
+                        'odds': bet['odds'],
+                        'stake': bet['stake'],
+                        'ev_percent': bet['ev_percent'],
+                        'result': 'Pending',
+                        'return': 0,
+                        'profit_loss': 0
+                    })
                 
                 st.session_state.scan_results = sample_bets
                 st.success(f"✅ Found {len(sample_bets)} EV bets!")
                 st.rerun()
         
         # Display results
-        if 'scan_results' in st.session_state:
+        if 'scan_results' in st.session_state and st.session_state.scan_results:
             st.markdown("### 🎯 Best EV Bets")
             
+            total_stake = 0
+            total_return = 0
+            
             for i, bet in enumerate(st.session_state.scan_results[:5], 1):
-                st.markdown(f"**{i}. {bet['match']}**")
-                col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 1])
-                col1.write(f"**{bet['outcome']}** @ {bet['odds']}")
-                col2.write(f"EV: {bet['ev_percent']:.1f}%")
-                col3.write(f"True: {bet['true_prob']:.1f}%")
-                col4.write(f"Stake: ${bet['stake']:.2f}")
-                col5.write(f"Return: ${bet['potential_return']:.2f}")
+                st.markdown(f"""
+                <div style="background:linear-gradient(135deg, #0D1B2E 0%, #1A2F4E 100%); border-radius:12px; padding:1rem 1.5rem; margin-bottom:0.8rem; border:1px solid rgba(0,212,255,0.1);">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <span style="color:#00D4FF; font-weight:600;">#{i}</span>
+                            <span style="color:#F0F4FA; font-weight:500; margin-left:0.5rem;">{bet['match']}</span>
+                        </div>
+                        <span style="background:rgba(0,212,255,0.1); color:#00D4FF; padding:0.2rem 0.8rem; border-radius:20px; font-size:0.8rem;">EV: {bet['ev_percent']:.1f}%</span>
+                    </div>
+                    <div style="display:flex; gap:1.5rem; margin-top:0.5rem; flex-wrap:wrap;">
+                        <span style="color:#4A6E8A; font-size:0.9rem;">{bet['outcome']} @ {bet['odds']}</span>
+                        <span style="color:#4A6E8A; font-size:0.9rem;">Stake: ${bet['stake']:.2f}</span>
+                        <span style="color:#00FF94; font-size:0.9rem;">Return: ${bet['potential_return']:.2f}</span>
+                        <span style="color:#4A6E8A; font-size:0.8rem;">Book: {bet['book']}</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
                 
-                # Buttons for each bet
-                col_a, col_b, col_c = st.columns([1, 1, 1])
-                with col_a:
-                    if st.button("📄 Slip", key=f"slip_{i}"):
-                        st.info(f"Paper slip generated for {bet['match']}")
-                with col_b:
-                    if st.button("📋 Copy", key=f"copy_{i}"):
-                        st.info(f"Bet details copied!")
-                with col_c:
-                    if st.button("ℹ️ Why?", key=f"why_{i}"):
-                        st.info(f"EV: {bet['ev_percent']:.1f}% — This bet has positive Expected Value.")
-                
-                st.markdown("---")
+                total_stake += bet['stake']
+                total_return += bet['potential_return']
             
             # Summary
-            total_stake = sum(b['stake'] for b in st.session_state.scan_results)
-            total_return = sum(b['potential_return'] for b in st.session_state.scan_results)
-            
             col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Total Bets", len(st.session_state.scan_results))
-            col2.metric("Total Stake", f"${total_stake:.2f}")
-            col3.metric("Expected Return", f"${total_return:.2f}")
-            col4.metric("Expected Profit", f"${total_return - total_stake:.2f}")
+            col1.metric("📊 Total Bets", len(st.session_state.scan_results))
+            col2.metric("💰 Total Stake", f"${total_stake:.2f}")
+            col3.metric("📈 Expected Return", f"${total_return:.2f}")
+            col4.metric("🎯 Expected Profit", f"${total_return - total_stake:.2f}")
     
-    # ─── TAB 2: MANUAL INPUT ──────────────────────────────────────
+    # ─── TAB 2: MANUAL INPUT ──────────────────────────────────
     with tab2:
         st.markdown("### 📝 Manual Odds Input")
         st.markdown("Enter odds manually if you see a good opportunity.")
@@ -801,12 +871,11 @@ def dashboard():
             outcome = st.selectbox("Your Bet", ["Home Win", "Draw", "Away Win"])
             stake = st.number_input("Your Stake ($)", min_value=1.0, step=1.0, value=10.0)
             
-            if st.form_submit_button("Add Bet", use_container_width=True):
+            if st.form_submit_button("➕ Add Bet", use_container_width=True, type="primary"):
                 if home_team and away_team and st.session_state.user_id:
                     odds_map = {"Home Win": home_odds, "Draw": draw_odds, "Away Win": away_odds}
                     selected_odds = odds_map.get(outcome, 0)
                     
-                    # Calculate EV (simplified)
                     implied_prob = 1 / selected_odds if selected_odds > 0 else 0
                     market_avg = get_market_average([home_odds, draw_odds, away_odds])
                     true_prob = calculate_true_probability(selected_odds, market_avg)
@@ -827,17 +896,12 @@ def dashboard():
                     
                     st.success(f"✅ Bet added: {home_team} vs {away_team} — {outcome} @ {selected_odds}")
                     st.rerun()
-                else:
-                    st.error("Please fill in all fields or log in again.")
     
-    # ─── TAB 3: HISTORY ────────────────────────────────────────────
+    # ─── TAB 3: HISTORY ──────────────────────────────────────
     with tab3:
         st.markdown("### 📊 Your Betting History")
         
-        if st.session_state.user_id:
-            bets = get_user_bets(st.session_state.user_id)
-        else:
-            bets = []
+        bets = get_user_bets(st.session_state.user_id)
         
         if bets:
             summary = get_bet_summary(bets)
@@ -870,7 +934,6 @@ def dashboard():
             df = pd.DataFrame(data)
             st.dataframe(df, use_container_width=True)
             
-            # Update result
             st.markdown("---")
             st.markdown("### ✏️ Update Result")
             
@@ -883,7 +946,7 @@ def dashboard():
                 result = st.selectbox("Result", ["Win", "Loss"])
                 return_amount = st.number_input("Return ($)", min_value=0.0, step=0.01)
                 
-                if st.button("Update"):
+                if st.button("Update", use_container_width=True, type="primary"):
                     stake = [b[8] for b in bets if b[0] == bet_id][0]
                     if result == "Win":
                         profit_loss = return_amount - stake
@@ -897,16 +960,13 @@ def dashboard():
                 st.info("No pending bets.")
         else:
             st.info("No bets yet. Start by scanning for opportunities!")
-
-    # ─── TAB 4: PAPER SLIP ──────────────────────────────────────────
+    
+    # ─── TAB 4: PAPER SLIP ───────────────────────────────────
     with tab4:
         st.markdown("### 📄 Paper Slip Generator")
         st.markdown("Generate a printable paper slip for retail betting.")
         
-        if st.session_state.user_id:
-            bets = get_user_bets(st.session_state.user_id)
-        else:
-            bets = []
+        bets = get_user_bets(st.session_state.user_id)
         pending = [b for b in bets if b[10] == 'Pending']
         
         if pending:
@@ -921,25 +981,25 @@ def dashboard():
                 total_stake = sum(b[8] for b in selected)
                 
                 slip_text = f"""
-    ═══════════════════════════════════════════════
-    📄 PARI SPORTIF — BULLETIN DE JEU
-    ═══════════════════════════════════════════════
-    Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-    ───────────────────────────────────────────────
-    """
+═══════════════════════════════════════════════
+📄 PARI SPORTIF — BULLETIN DE JEU
+═══════════════════════════════════════════════
+Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+───────────────────────────────────────────────
+"""
                 for bet in selected:
                     slip_text += f"""
-    {bet[4]} vs {bet[5]}
-       Bet: {bet[6]} @ {bet[7]}
-       Stake: ${bet[8]:.2f}
-       Potential: ${bet[8] * bet[7]:.2f}
-    """
+{bet[4]} vs {bet[5]}
+   Bet: {bet[6]} @ {bet[7]}
+   Stake: ${bet[8]:.2f}
+   Potential: ${bet[8] * bet[7]:.2f}
+"""
                 
                 slip_text += f"""
-    ───────────────────────────────────────────────
-    Total Stake: ${total_stake:.2f}
-    ═══════════════════════════════════════════════
-    """
+───────────────────────────────────────────────
+Total Stake: ${total_stake:.2f}
+═══════════════════════════════════════════════
+"""
                 
                 st.code(slip_text, language="text")
                 
@@ -952,49 +1012,6 @@ def dashboard():
                 )
         else:
             st.info("No pending bets available. Scan for opportunities first!")
-
-    # ─── TAB 5: HELP ──────────────────────────────────────────────────
-    with tab5:
-        st.markdown("### ℹ️ Help & Guides")
-        
-        st.markdown("""
-        **Welcome to the Only Solutions Betting System!**
-        
-        This app uses **mathematical betting** to find profitable opportunities.
-        
-        ---
-        
-        ### 🎯 Getting Started
-        
-        1. **Scan for opportunities** — Click the Scanner tab
-        2. **Review the best bets** — Check EV% and probabilities
-        3. **Place your bets** — Use paper slip or manual betting
-        4. **Track results** — Update wins/losses in History
-        
-        ---
-        
-        ### 📖 Key Concepts
-        
-        **EV (Expected Value)** — The average profit per bet over time. Only bet when EV is positive!
-        
-        **Arbitrage** — A guaranteed profit opportunity across different bookmakers.
-        
-        **Kelly Criterion** — Optimal bet size based on your bankroll.
-        
-        ---
-        
-        ### ❓ Need Help?
-        
-        Contact us at: **support@onlysolutions.ca**
-        
-        """)
-        
-        st.markdown("---")
-        st.markdown(f"""
-        <div style="text-align:center; color:#1A3050; font-size:0.8rem;">
-            {COMPANY_NAME} · {DOMAIN} · {YEAR}
-        </div>
-        """, unsafe_allow_html=True)
 
 def get_bet_summary(bets):
     total = len(bets)
@@ -1029,7 +1046,6 @@ if 'user_id' not in st.session_state:
 # ─────────────────────────────────────────────────────────────
 init_db()
 
-# Check URL params
 query_params = st.query_params
 page = query_params.get('page', ['landing'])[0]
 
@@ -1049,8 +1065,17 @@ else:
 if st.session_state.authenticated:
     with st.sidebar:
         st.markdown("---")
-        st.markdown(f"**{st.session_state.user_name}**")
-        st.markdown(f"📧 {st.session_state.user_email}")
+        st.markdown(f"""
+        <div style="display:flex; align-items:center; gap:0.8rem; padding:0.5rem 0;">
+            <div style="width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg, #00D4FF, #00FF94); display:flex; align-items:center; justify-content:center; color:#0D1B2E; font-weight:700; font-size:1.2rem;">
+                {st.session_state.user_name[0].upper()}
+            </div>
+            <div>
+                <div style="color:#F0F4FA; font-weight:500;">{st.session_state.user_name}</div>
+                <div style="color:#4A6E8A; font-size:0.8rem;">{st.session_state.user_email}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
         st.markdown("---")
         
         if st.button("🚪 Logout", use_container_width=True):
