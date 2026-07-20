@@ -226,7 +226,7 @@ def calculate_true_probability(odds, market_avg):
     return implied * adjustment
 
 # ─────────────────────────────────────────────────────────────
-# LANDING PAGE (PUBLIC) — FIXED BUTTON
+# LANDING PAGE (PUBLIC) — FIXED WITH SINGLE BUTTON
 # ─────────────────────────────────────────────────────────────
 def landing_page():
     st.markdown(f"""
@@ -459,20 +459,16 @@ def landing_page():
         </div>
         """, unsafe_allow_html=True)
     
-    # ─── FIXED: STREAMLIT BUTTON ─────────────────────────────
+    # ─── FIXED: SINGLE BUTTON THAT GOES TO SIGNUP ─────────────
     st.markdown("</div>", unsafe_allow_html=True)
     
-    # Use Streamlit's own button instead of HTML onclick
+    # ONE CLEAN BUTTON — goes to signup page
     if st.button("🚀 Start Free Trial", use_container_width=True, type="primary"):
-        st.switch_page("app.py")  # This reloads with signup
-    
-    # Or use link button to go to signup page
-    st.link_button("🚀 Start Free Trial", "?page=signup", use_container_width=True, type="primary")
-    
-    # ─── END FIX ──────────────────────────────────────────────
+        st.session_state.show_signup = True
+        st.rerun()
     
     st.markdown(f"""
-    <div style="text-align:center; color:#1A3050; font-size:0.8rem; padding:2rem 0;">
+    <div style="text-align:center; color:#4A6E8A; font-size:0.8rem; padding:0.5rem 0 2rem 0;">
         🆓 7-day free trial · Then $1.99/month
     </div>
     """, unsafe_allow_html=True)
