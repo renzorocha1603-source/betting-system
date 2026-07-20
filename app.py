@@ -42,7 +42,7 @@ with st.sidebar:
     min_arb_profit = st.slider("Min. Arbitrage Profit %", 0.1, 5.0, 0.5, 0.1)
     kelly_fraction = st.slider("Kelly Fraction", 0.1, 0.5, 0.25, 0.05)
     st.markdown("---")
-    st.caption("v5.0 · Only Solutions Inc.")
+    st.caption("v5.1 · Only Solutions Inc.")
 
 # ─────────────────────────────────────────────────────────────
 # TELEGRAM ALERT FUNCTION (PASSIVE)
@@ -1109,6 +1109,8 @@ with tab6:
             for sport in sports[:10]:
                 events = scanner.fetch_live_odds(sport)
                 total_events += len(events)
+                
+                # FIX: Initialize sport_debug with ALL keys
                 sport_debug = {
                     'sport': sport,
                     'events_found': len(events),
