@@ -106,7 +106,17 @@ def get_user(email):
     conn.close()
     return result
 
+def get_user_id(email):
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute('SELECT id FROM users WHERE email = ?', (email,))
+    result = c.fetchone()
+    conn.close()
+    return result[0] if result else None
+
 def add_bet(user_id, bet_data):
+    if user_id is None:
+        return False
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
     c.execute('''
@@ -128,8 +138,11 @@ def add_bet(user_id, bet_data):
     ))
     conn.commit()
     conn.close()
+    return True
 
 def get_user_bets(user_id):
+    if user_id is None:
+        return []
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
     c.execute('SELECT * FROM bets WHERE user_id = ? ORDER BY timestamp DESC', (user_id,))
@@ -607,6 +620,13 @@ def login_page():
 # DASHBOARD (PRIVATE)
 # ─────────────────────────────────────────────────────────────
 def dashboard():
+    # Make sure user_id exists
+    if 'user_id' not in st.session_state:
+        st.error("User session error. Please log in again.")
+        st.session_state.authenticated = False
+        st.rerun()
+        return
+    
     st.markdown(f"""
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
         <div>
@@ -704,20 +724,21 @@ def dashboard():
                     }
                 ]
                 
-                for bet in sample_bets:
-                    # Add to database
-                    add_bet(st.session_state.user_id, {
-                        'sport': 'Soccer',
-                        'home_team': bet['match'].split(' vs ')[0],
-                        'away_team': bet['match'].split(' vs ')[1],
-                        'outcome': bet['outcome'],
-                        'odds': bet['odds'],
-                        'stake': bet['stake'],
-                        'ev_percent': bet['ev_percent'],
-                        'result': 'Pending',
-                        'return': 0,
-                        'profit_loss': 0
-                    })
+                # Only add bets if user_id exists
+                if st.session_state.user_id:
+                    for bet in sample_bets:
+                        add_bet(st.session_state.user_id, {
+                            'sport': 'Soccer',
+                            'home_team': bet['match'].split(' vs ')[0],
+                            'away_team': bet['match'].split(' vs ')[1],
+                            'outcome': bet['outcome'],
+                            'odds': bet['odds'],
+                            'stake': bet['stake'],
+                            'ev_percent': bet['ev_percent'],
+                            'result': 'Pending',
+                            'return': 0,
+                            'profit_loss': 0
+                        })
                 
                 st.session_state.scan_results = sample_bets
                 st.success(f"✅ Found {len(sample_bets)} EV bets!")
@@ -781,7 +802,7 @@ def dashboard():
             stake = st.number_input("Your Stake ($)", min_value=1.0, step=1.0, value=10.0)
             
             if st.form_submit_button("Add Bet", use_container_width=True):
-                if home_team and away_team:
+                if home_team and away_team and st.session_state.user_id:
                     odds_map = {"Home Win": home_odds, "Draw": draw_odds, "Away Win": away_odds}
                     selected_odds = odds_map.get(outcome, 0)
                     
@@ -806,12 +827,17 @@ def dashboard():
                     
                     st.success(f"✅ Bet added: {home_team} vs {away_team} — {outcome} @ {selected_odds}")
                     st.rerun()
+                else:
+                    st.error("Please fill in all fields or log in again.")
     
     # ─── TAB 3: HISTORY ────────────────────────────────────────────
     with tab3:
         st.markdown("### 📊 Your Betting History")
         
-        bets = get_user_bets(st.session_state.user_id)
+        if st.session_state.user_id:
+            bets = get_user_bets(st.session_state.user_id)
+        else:
+            bets = []
         
         if bets:
             summary = get_bet_summary(bets)
@@ -877,7 +903,10 @@ def dashboard():
         st.markdown("### 📄 Paper Slip Generator")
         st.markdown("Generate a printable paper slip for retail betting.")
         
-        bets = get_user_bets(st.session_state.user_id)
+        if st.session_state.user_id:
+            bets = get_user_bets(st.session_state.user_id)
+        else:
+            bets = []
         pending = [b for b in bets if b[10] == 'Pending']
         
         if pending:
@@ -992,6 +1021,8 @@ if 'show_login' not in st.session_state:
     st.session_state.show_login = False
 if 'scan_results' not in st.session_state:
     st.session_state.scan_results = []
+if 'user_id' not in st.session_state:
+    st.session_state.user_id = None
 
 # ─────────────────────────────────────────────────────────────
 # ROUTER
