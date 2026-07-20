@@ -50,8 +50,6 @@ class SportsBookScanner:
         self.base_url = "https://api.the-odds-api.com/v4/sports"
         self.regions = regions
         self.markets = markets
-        self.cache_file = "odds_cache.json"
-        self.cache_ttl = 30  # seconds
 
     def get_active_sports(self) -> list:
         """Fetches all currently active sports."""
@@ -63,9 +61,10 @@ class SportsBookScanner:
             response = requests.get(url, timeout=10)
             if response.status_code == 200:
                 return [sport['key'] for sport in response.json()]
-            return ["soccer_epl", "soccer_uefa_champs_league"]
-        except:
-            return ["soccer_epl", "soccer_uefa_champs_league"]
+            return []
+        except Exception as e:
+            st.error(f"API Error: {e}")
+            return []
 
     def fetch_live_odds(self, sport: str) -> list:
         """Fetches real-time odds for a specific sport."""
@@ -83,8 +82,9 @@ class SportsBookScanner:
             response = requests.get(url, params=params, timeout=10)
             if response.status_code == 200:
                 return response.json()
-            return []
-        except:
+            else:
+                return []
+        except Exception as e:
             return []
 
     def get_sample_data(self, sport: str) -> list:
@@ -247,7 +247,6 @@ class ArbitrageEngine:
             if rounded[outcome] < 1:
                 rounded[outcome] = 1
         
-        # Adjust to maintain total
         rounded_total = sum(rounded.values())
         if rounded_total != total:
             largest = max(rounded, key=rounded.get)
@@ -947,26 +946,54 @@ with tab6:
     with col3:
         min_profit = st.slider("Min. Profit %", 0.1, 5.0, 0.5, 0.1)
     
+    # Debug mode toggle
+    show_debug = st.checkbox("🔍 Show Debug Info", value=True)
+    
+    # API Key Test Button
+    if st.button("🧪 Test API Key", use_container_width=True):
+        with st.spinner("Testing API key..."):
+            test_scanner = SportsBookScanner(ODDS_API_KEY)
+            test_result = test_scanner.get_active_sports()
+            if test_result:
+                st.success(f"✅ API key working! Found {len(test_result)} active sports.")
+                st.write(f"Sports: {', '.join(test_result[:10])}")
+            else:
+                st.error("❌ API key test failed. Please check your API key.")
+    
     if st.button("🔍 Scan for Arbitrage", use_container_width=True, type="primary"):
         with st.spinner("Scanning multiple sportsbooks..."):
             scanner = SportsBookScanner(ODDS_API_KEY)
             
             if scan_sport == "all":
                 sports = scanner.get_active_sports()
+                if not sports:
+                    st.error("No sports found. Please check your API key.")
+                    st.stop()
             else:
                 sports = [scan_sport]
             
+            debug_info = []
             all_arbs = []
+            total_events = 0
+            total_books = 0
             
-            for sport in sports[:5]:  # Limit to 5 sports to avoid rate limits
+            for sport in sports[:5]:
                 events = scanner.fetch_live_odds(sport)
+                total_events += len(events)
+                sport_debug = {
+                    'sport': sport,
+                    'events_found': len(events),
+                    'books_found': 0,
+                    'arbitrage_found': 0
+                }
                 
                 for event in events:
                     if 'bookmakers' not in event:
                         continue
                     
-                    # Get best odds from each book
-                    best_odds = {}
+                    total_books += len(event.get('bookmakers', []))
+                    sport_debug['books_found'] += len(event.get('bookmakers', []))
+                    
                     for book in event.get('bookmakers', []):
                         for market in book.get('markets', []):
                             if market.get('key') == 'h2h':
@@ -976,7 +1003,6 @@ with tab6:
                                     price = outcome.get('price', 0)
                                     odds[name] = price
                                 
-                                # Check if we have 2 or 3 outcomes
                                 if len(odds) >= 2:
                                     home = odds.get(event.get('home_team', ''), 0)
                                     away = odds.get(event.get('away_team', ''), 0)
@@ -1001,8 +1027,46 @@ with tab6:
                                                 )
                                             )
                                         })
+                                        sport_debug['arbitrage_found'] += 1
+                
+                debug_info.append(sport_debug)
             
             st.session_state.scanner_results = all_arbs
+            st.session_state.scanner_debug = {
+                'debug_info': debug_info,
+                'total_events': total_events,
+                'total_books': total_books,
+                'total_arbs': len(all_arbs)
+            }
+    
+    # Display debug info
+    if show_debug and 'scanner_debug' in st.session_state:
+        debug = st.session_state.scanner_debug
+        st.markdown("---")
+        st.markdown("### 📊 Scan Summary")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Sports Scanned", len(debug['debug_info']))
+        col2.metric("Events Found", debug['total_events'])
+        col3.metric("Books Checked", debug['total_books'])
+        col4.metric("Arbitrage Found", debug['total_arbs'])
+        
+        if debug['total_events'] == 0:
+            st.warning("⚠️ No events found. This could mean:")
+            st.markdown("""
+            - Your API key is invalid or expired
+            - The selected sport has no active matches
+            - You've reached your API rate limit (500 requests/day on free tier)
+            """)
+        
+        # Show detailed debug per sport
+        with st.expander("📋 Detailed Scan Results"):
+            for sport_debug in debug['debug_info']:
+                st.markdown(f"**{sport_debug['sport']}**")
+                st.markdown(f"- Events: {sport_debug['events_found']}")
+                st.markdown(f"- Books: {sport_debug['books_found']}")
+                st.markdown(f"- Arbs: {sport_debug['arbitrage_found']}")
+                st.markdown("---")
     
     # Display scanner results
     if st.session_state.scanner_results:
@@ -1031,8 +1095,14 @@ with tab6:
             
             if st.button(f"✅ Add to Slip", key=f"add_arb_{i}"):
                 st.success("Added to paper slip!")
-    else:
-        st.info("No arbitrage opportunities found. Try scanning again or adjust the minimum profit threshold.")
+    elif 'scanner_debug' in st.session_state and st.session_state.scanner_debug['total_arbs'] == 0:
+        st.info("No arbitrage opportunities found. Try:")
+        st.markdown("""
+        - Scanning a different sport
+        - Lowering the minimum profit threshold
+        - Scanning during peak hours (when odds are more volatile)
+        - Checking smaller markets (less efficient = more arbs)
+        """)
 
 # ─────────────────────────────────────────────────────────────
 # FOOTER
