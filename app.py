@@ -11,8 +11,17 @@ import re
 import io
 import time
 from PIL import Image
-import plotly.graph_objects as go
-import plotly.express as px
+
+# ─────────────────────────────────────────────────────────────
+# PLOTLY IMPORTS - FIXED
+# ─────────────────────────────────────────────────────────────
+try:
+    import plotly.graph_objects as go
+    import plotly.express as px
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+    st.warning("⚠️ Plotly not installed. Run: pip install plotly")
 
 # ─────────────────────────────────────────────────────────────
 # PAGE CONFIG
@@ -32,7 +41,7 @@ DOMAIN = "onlysolutions.ca"
 YEAR = datetime.now().year
 
 # ─────────────────────────────────────────────────────────────
-# HARDCODED API KEYS
+# HARDCODED API KEYS (Replace with your keys)
 # ─────────────────────────────────────────────────────────────
 DEEPSEEK_API_KEY = "sk-09832202e2c74c7ea73891197056a8e6"
 ODDS_API_KEY = "a585010a77f214e1ce910e778b079400"
@@ -228,114 +237,87 @@ def calculate_true_probability(odds, market_avg):
     return implied * adjustment
 
 # ─────────────────────────────────────────────────────────────
-# VISUALIZATION FUNCTIONS — STUNNING GRAPHS
+# VISUALIZATION FUNCTIONS
 # ─────────────────────────────────────────────────────────────
 def create_performance_chart(bets):
-    if not bets:
+    if not bets or not PLOTLY_AVAILABLE:
         return None
     
-    df = pd.DataFrame([{
-        'Date': bet[2][:10],
-        'Profit': bet[12] if bet[12] is not None else 0,
-        'Stake': bet[8],
-        'Result': bet[10] if bet[10] != 'Pending' else 'Pending'
-    } for bet in bets])
-    
-    df = df.sort_values('Date')
-    df['Cumulative'] = df['Profit'].cumsum()
-    
-    fig = go.Figure()
-    
-    fig.add_trace(go.Scatter(
-        x=df['Date'],
-        y=df['Cumulative'],
-        mode='lines+markers',
-        name='Cumulative Profit',
-        line=dict(color='#00D4FF', width=3),
-        marker=dict(size=8, color='#00D4FF'),
-        fill='tozeroy',
-        fillcolor='rgba(0,212,255,0.1)'
-    ))
-    
-    fig.update_layout(
-        template='plotly_dark',
-        paper_bgcolor='rgba(13,27,46,0)',
-        plot_bgcolor='rgba(13,27,46,0)',
-        font=dict(color='#B8CCDE'),
-        height=350,
-        margin=dict(l=0, r=0, t=30, b=30),
-        xaxis_title='Date',
-        yaxis_title='Cumulative Profit ($)',
-        hovermode='x unified'
-    )
-    
-    return fig
+    try:
+        df = pd.DataFrame([{
+            'Date': bet[2][:10],
+            'Profit': bet[12] if bet[12] is not None else 0,
+            'Stake': bet[8],
+            'Result': bet[10] if bet[10] != 'Pending' else 'Pending'
+        } for bet in bets])
+        
+        df = df.sort_values('Date')
+        df['Cumulative'] = df['Profit'].cumsum()
+        
+        fig = go.Figure()
+        
+        fig.add_trace(go.Scatter(
+            x=df['Date'],
+            y=df['Cumulative'],
+            mode='lines+markers',
+            name='Cumulative Profit',
+            line=dict(color='#00D4FF', width=3),
+            marker=dict(size=8, color='#00D4FF'),
+            fill='tozeroy',
+            fillcolor='rgba(0,212,255,0.1)'
+        ))
+        
+        fig.update_layout(
+            template='plotly_dark',
+            paper_bgcolor='rgba(13,27,46,0)',
+            plot_bgcolor='rgba(13,27,46,0)',
+            font=dict(color='#B8CCDE'),
+            height=350,
+            margin=dict(l=0, r=0, t=30, b=30),
+            xaxis_title='Date',
+            yaxis_title='Cumulative Profit ($)',
+            hovermode='x unified'
+        )
+        
+        return fig
+    except:
+        return None
 
 def create_ev_distribution_chart(bets):
-    if not bets:
+    if not bets or not PLOTLY_AVAILABLE:
         return None
     
-    ev_values = [b[9] for b in bets if b[9] is not None and b[9] > 0]
-    if not ev_values:
+    try:
+        ev_values = [b[9] for b in bets if b[9] is not None and b[9] > 0]
+        if not ev_values:
+            return None
+        
+        fig = go.Figure()
+        
+        fig.add_trace(go.Histogram(
+            x=ev_values,
+            nbinsx=20,
+            marker=dict(color='#00D4FF', line=dict(color='#0D1B2E', width=1)),
+            opacity=0.8
+        ))
+        
+        fig.update_layout(
+            template='plotly_dark',
+            paper_bgcolor='rgba(13,27,46,0)',
+            plot_bgcolor='rgba(13,27,46,0)',
+            font=dict(color='#B8CCDE'),
+            height=300,
+            margin=dict(l=0, r=0, t=30, b=30),
+            xaxis_title='EV %',
+            yaxis_title='Frequency'
+        )
+        
+        return fig
+    except:
         return None
-    
-    fig = go.Figure()
-    
-    fig.add_trace(go.Histogram(
-        x=ev_values,
-        nbinsx=20,
-        marker=dict(color='#00D4FF', line=dict(color='#0D1B2E', width=1)),
-        opacity=0.8
-    ))
-    
-    fig.update_layout(
-        template='plotly_dark',
-        paper_bgcolor='rgba(13,27,46,0)',
-        plot_bgcolor='rgba(13,27,46,0)',
-        font=dict(color='#B8CCDE'),
-        height=300,
-        margin=dict(l=0, r=0, t=30, b=30),
-        xaxis_title='EV %',
-        yaxis_title='Frequency'
-    )
-    
-    return fig
-
-def create_bet_type_pie(bets):
-    if not bets:
-        return None
-    
-    outcomes = [b[6] for b in bets if b[6]]
-    if not outcomes:
-        return None
-    
-    df = pd.DataFrame(outcomes, columns=['Outcome'])
-    counts = df['Outcome'].value_counts()
-    
-    fig = go.Figure(data=[go.Pie(
-        labels=counts.index,
-        values=counts.values,
-        hole=0.4,
-        marker=dict(colors=['#00D4FF', '#C9A84C', '#3FB950', '#FF6B6B']),
-        textinfo='label+percent',
-        textposition='inside',
-        textfont=dict(color='#0D1B2E')
-    )])
-    
-    fig.update_layout(
-        template='plotly_dark',
-        paper_bgcolor='rgba(13,27,46,0)',
-        plot_bgcolor='rgba(13,27,46,0)',
-        font=dict(color='#B8CCDE'),
-        height=300,
-        margin=dict(l=0, r=0, t=0, b=0),
-        showlegend=False
-    )
-    
-    return fig
 
 # ─────────────────────────────────────────────────────────────
-# LANDING PAGE (PUBLIC) — VISUALLY STUNNING
+# LANDING PAGE (PUBLIC)
 # ─────────────────────────────────────────────────────────────
 def landing_page():
     st.markdown(f"""
@@ -657,7 +639,7 @@ def login_page():
         st.rerun()
 
 # ─────────────────────────────────────────────────────────────
-# DASHBOARD (PRIVATE) — VISUALLY STUNNING
+# DASHBOARD (PRIVATE)
 # ─────────────────────────────────────────────────────────────
 def dashboard():
     if 'user_id' not in st.session_state or st.session_state.user_id is None:
@@ -697,24 +679,27 @@ def dashboard():
         col4.metric("📊 Net Profit", f"${profit:.2f}", delta=f"{profit:+.2f}")
         
         # ─── GRAPHS ────────────────────────────────────────────
-        st.markdown("---")
-        st.markdown("### 📈 Performance Analytics")
-        
-        col_chart1, col_chart2 = st.columns(2)
-        
-        with col_chart1:
-            fig = create_performance_chart(bets)
-            if fig:
-                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            else:
-                st.info("No enough data for performance chart")
-        
-        with col_chart2:
-            fig = create_ev_distribution_chart(bets)
-            if fig:
-                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            else:
-                st.info("No enough data for EV distribution chart")
+        if PLOTLY_AVAILABLE:
+            st.markdown("---")
+            st.markdown("### 📈 Performance Analytics")
+            
+            col_chart1, col_chart2 = st.columns(2)
+            
+            with col_chart1:
+                fig = create_performance_chart(bets)
+                if fig:
+                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                else:
+                    st.info("No enough data for performance chart")
+            
+            with col_chart2:
+                fig = create_ev_distribution_chart(bets)
+                if fig:
+                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                else:
+                    st.info("No enough data for EV distribution chart")
+        else:
+            st.info("📊 Install Plotly for interactive charts: `pip install plotly`")
     else:
         st.info("👋 No bets yet. Start scanning for opportunities below!")
     
@@ -743,7 +728,6 @@ def dashboard():
         
         if st.button("🔍 Scan Now", use_container_width=True, type="primary"):
             with st.spinner("🔄 Scanning 70+ bookmakers..."):
-                # Sample data for demo — in production, this would be real API data
                 sample_bets = [
                     {
                         'match': 'Arsenal vs Coventry',
@@ -815,7 +799,6 @@ def dashboard():
                 st.success(f"✅ Found {len(sample_bets)} EV bets!")
                 st.rerun()
         
-        # Display results
         if 'scan_results' in st.session_state and st.session_state.scan_results:
             st.markdown("### 🎯 Best EV Bets")
             
@@ -844,7 +827,6 @@ def dashboard():
                 total_stake += bet['stake']
                 total_return += bet['potential_return']
             
-            # Summary
             col1, col2, col3, col4 = st.columns(4)
             col1.metric("📊 Total Bets", len(st.session_state.scan_results))
             col2.metric("💰 Total Stake", f"${total_stake:.2f}")
