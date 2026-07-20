@@ -72,10 +72,12 @@ def init_db():
     conn = get_conn()
     c = conn.cursor()
 
+    # Check if users table exists
     c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
     table_exists = c.fetchone()
 
     if not table_exists:
+        # Create fresh users table with all columns
         c.execute('''
         CREATE TABLE users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -84,17 +86,25 @@ def init_db():
             name TEXT,
             created_at TEXT,
             subscription_status TEXT DEFAULT 'active',
-            is_admin INTEGER DEFAULT 0
+            is_admin INTEGER DEFAULT 0,
+            bankroll REAL DEFAULT 1000.0
         )
         ''')
     else:
+        # Check existing columns and add missing ones
         c.execute("PRAGMA table_info(users)")
         columns = [col[1] for col in c.fetchall()]
+        
         if 'is_admin' not in columns:
             c.execute('ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0')
+        
         if 'bankroll' not in columns:
             c.execute('ALTER TABLE users ADD COLUMN bankroll REAL DEFAULT 1000.0')
+        
+        if 'subscription_status' not in columns:
+            c.execute("ALTER TABLE users ADD COLUMN subscription_status TEXT DEFAULT 'active'")
 
+    # Create bets table if not exists
     c.execute('''
     CREATE TABLE IF NOT EXISTS bets (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -115,20 +125,39 @@ def init_db():
     )
     ''')
 
-    # Add bet_type column if it doesn't exist
+    # Add bet_type column if it doesn't exist (for existing tables)
     c.execute("PRAGMA table_info(bets)")
     bet_columns = [col[1] for col in c.fetchall()]
     if 'bet_type' not in bet_columns:
-        c.execute('ALTER TABLE bets ADD COLUMN bet_type TEXT DEFAULT "ev"')
+        try:
+            c.execute('ALTER TABLE bets ADD COLUMN bet_type TEXT DEFAULT "ev"')
+        except:
+            pass  # Column might already exist
 
+    # Create admin user if not exists
     admin_email = "admin@onlys.com"
     admin_password = hashlib.sha256("admin123".encode()).hexdigest()
     c.execute('SELECT * FROM users WHERE email = ?', (admin_email,))
     if not c.fetchone():
-        c.execute('''
-        INSERT INTO users (email, password, name, created_at, is_admin, bankroll)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ''', (admin_email, admin_password, "Administrator", datetime.now().isoformat(), 1, 10000.0))
+        # Check how many columns the users table has to insert correctly
+        c.execute("PRAGMA table_info(users)")
+        user_columns = [col[1] for col in c.fetchall()]
+        
+        if 'bankroll' in user_columns and 'subscription_status' in user_columns:
+            c.execute('''
+            INSERT INTO users (email, password, name, created_at, subscription_status, is_admin, bankroll)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (admin_email, admin_password, "Administrator", datetime.now().isoformat(), 'active', 1, 10000.0))
+        elif 'bankroll' in user_columns:
+            c.execute('''
+            INSERT INTO users (email, password, name, created_at, is_admin, bankroll)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ''', (admin_email, admin_password, "Administrator", datetime.now().isoformat(), 1, 10000.0))
+        else:
+            c.execute('''
+            INSERT INTO users (email, password, name, created_at, is_admin)
+            VALUES (?, ?, ?, ?, ?)
+            ''', (admin_email, admin_password, "Administrator", datetime.now().isoformat(), 1))
 
     conn.commit()
     conn.close()
@@ -140,10 +169,21 @@ def create_user(email, password, name):
     conn = get_conn()
     c = conn.cursor()
     try:
-        c.execute('''
-        INSERT INTO users (email, password, name, created_at, bankroll)
-        VALUES (?, ?, ?, ?, ?)
-        ''', (email, hash_password(password), name, datetime.now().isoformat(), 1000.0))
+        # Check table structure
+        c.execute("PRAGMA table_info(users)")
+        user_columns = [col[1] for col in c.fetchall()]
+        
+        if 'bankroll' in user_columns:
+            c.execute('''
+            INSERT INTO users (email, password, name, created_at, bankroll)
+            VALUES (?, ?, ?, ?, ?)
+            ''', (email, hash_password(password), name, datetime.now().isoformat(), 1000.0))
+        else:
+            c.execute('''
+            INSERT INTO users (email, password, name, created_at)
+            VALUES (?, ?, ?, ?)
+            ''', (email, hash_password(password), name, datetime.now().isoformat()))
+        
         conn.commit()
         return True
     except sqlite3.IntegrityError:
@@ -160,19 +200,25 @@ def authenticate_user(email, password):
     return result
 
 def get_user_bankroll(user_id):
-    conn = get_conn()
-    c = conn.cursor()
-    c.execute('SELECT bankroll FROM users WHERE id = ?', (user_id,))
-    result = c.fetchone()
-    conn.close()
-    return result[0] if result else 1000.0
+    try:
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute('SELECT bankroll FROM users WHERE id = ?', (user_id,))
+        result = c.fetchone()
+        conn.close()
+        return result[0] if result else 1000.0
+    except:
+        return 1000.0
 
 def update_user_bankroll(user_id, amount):
-    conn = get_conn()
-    c = conn.cursor()
-    c.execute('UPDATE users SET bankroll = ? WHERE id = ?', (amount, user_id))
-    conn.commit()
-    conn.close()
+    try:
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute('UPDATE users SET bankroll = ? WHERE id = ?', (amount, user_id))
+        conn.commit()
+        conn.close()
+    except:
+        pass
 
 def get_user_bets(user_id):
     if user_id is None:
@@ -226,6 +272,9 @@ def get_bet_summary(bets):
     losses = len([b for b in bets if b[10] == 'Loss'])
     pending = len([b for b in bets if b[10] == 'Pending'])
     profit = sum([b[12] for b in bets if b[12] is not None])
+    
+    total_stakes = sum([b[8] for b in bets if b[8] and b[8] > 0])
+    roi = (profit / total_stakes * 100) if total_stakes > 0 else 0
 
     return {
         'total': total,
@@ -234,7 +283,7 @@ def get_bet_summary(bets):
         'pending': pending,
         'win_rate': wins / (wins + losses) * 100 if (wins + losses) > 0 else 0,
         'net_profit': profit,
-        'roi': (profit / sum([b[8] for b in bets if b[8] > 0]) * 100) if sum([b[8] for b in bets if b[8] > 0]) > 0 else 0
+        'roi': roi
     }
 
 # ─────────────────────────────────────────────────────────────
@@ -339,7 +388,15 @@ LANGUAGES = {
         "pricing_feature_3": "Paper Slip Generator",
         "pricing_feature_4": "AI-Powered Analysis",
         "pricing_feature_5": "Bankroll Tracking",
-        "pricing_feature_6": "No Commitment · Cancel Anytime"
+        "pricing_feature_6": "No Commitment · Cancel Anytime",
+        "filter_label": "Filter by Result",
+        "filter_all": "All",
+        "filter_pending": "Pending",
+        "filter_win": "Win",
+        "filter_loss": "Loss",
+        "type_ev": "⚡ EV",
+        "type_arb": "🔒 Arb",
+        "type_manual": "📝 Manual"
     },
     "fr": {
         "app_name": "Système de Paris Intelligent",
@@ -439,7 +496,15 @@ LANGUAGES = {
         "pricing_feature_3": "Générateur de Bulletin",
         "pricing_feature_4": "Analyse IA",
         "pricing_feature_5": "Suivi Bankroll",
-        "pricing_feature_6": "Sans Engagement · Annulez Quand Vous Voulez"
+        "pricing_feature_6": "Sans Engagement · Annulez Quand Vous Voulez",
+        "filter_label": "Filtrer par Résultat",
+        "filter_all": "Tous",
+        "filter_pending": "En attente",
+        "filter_win": "Gagné",
+        "filter_loss": "Perdu",
+        "type_ev": "⚡ EV",
+        "type_arb": "🔒 Arb",
+        "type_manual": "📝 Manuel"
     },
     "es": {
         "app_name": "Sistema de Apuestas Inteligente",
@@ -539,7 +604,15 @@ LANGUAGES = {
         "pricing_feature_3": "Generador de Boletos",
         "pricing_feature_4": "Análisis IA",
         "pricing_feature_5": "Seguimiento Bankroll",
-        "pricing_feature_6": "Sin Compromiso · Cancela Cuando Quieras"
+        "pricing_feature_6": "Sin Compromiso · Cancela Cuando Quieras",
+        "filter_label": "Filtrar por Resultado",
+        "filter_all": "Todos",
+        "filter_pending": "Pendiente",
+        "filter_win": "Ganado",
+        "filter_loss": "Perdido",
+        "type_ev": "⚡ EV",
+        "type_arb": "🔒 Arb",
+        "type_manual": "📝 Manual"
     }
 }
 
@@ -1061,14 +1134,6 @@ def get_theme_css():
         gap: 1rem;
     }}
 
-    .bankroll-section {{
-        background: var(--bg-card);
-        border: 1px solid var(--border-glass);
-        border-radius: var(--card-radius);
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-    }}
-
     #MainMenu, footer, header {{ visibility: hidden !important; display: none !important; }}
 
     @media (max-width: 768px) {{
@@ -1378,6 +1443,7 @@ def dashboard():
 
     # Bankroll management
     bankroll = get_user_bankroll(st.session_state.user_id)
+    bets = get_user_bets(st.session_state.user_id)
 
     st.markdown(f"""
     <div class="terminal-nav">
@@ -1400,8 +1466,6 @@ def dashboard():
     </div>
     """, unsafe_allow_html=True)
 
-    bets = get_user_bets(st.session_state.user_id)
-
     if bets:
         summary = get_bet_summary(bets)
         total_bets = summary['total']
@@ -1415,12 +1479,12 @@ def dashboard():
         st.markdown(f"""
         <div class="kpi-grid">
             <div class="kpi-card">
-                <div class="label">{t['active_arbs']}</div>
+                <div class="label">{t['pending']}</div>
                 <div class="value cyan">{pending}</div>
                 <div class="change">{total_bets} total · {pending} pending</div>
             </div>
             <div class="kpi-card">
-                <div class="label">{t['avg_roi']}</div>
+                <div class="label">{t['roi']}</div>
                 <div class="value lime">{roi:.1f}%</div>
                 <div class="change positive">{wins}W / {losses}L · {win_rate:.1f}% win rate</div>
             </div>
@@ -1439,8 +1503,8 @@ def dashboard():
     else:
         st.markdown(f"""
         <div class="kpi-grid">
-            <div class="kpi-card"><div class="label">{t['active_arbs']}</div><div class="value cyan">0</div><div class="change">No active bets</div></div>
-            <div class="kpi-card"><div class="label">{t['avg_roi']}</div><div class="value lime">0%</div><div class="change">No data yet</div></div>
+            <div class="kpi-card"><div class="label">{t['pending']}</div><div class="value cyan">0</div><div class="change">No active bets</div></div>
+            <div class="kpi-card"><div class="label">{t['roi']}</div><div class="value lime">0%</div><div class="change">No data yet</div></div>
             <div class="kpi-card"><div class="label">{t['bankroll']}</div><div class="value orange">${bankroll:.2f}</div><div class="change">Ready to bet</div></div>
             <div class="kpi-card"><div class="label">{t['total_bets']}</div><div class="value purple">0</div><div class="change">Scan to find value</div></div>
         </div>
@@ -1463,7 +1527,8 @@ def dashboard():
                 st.success(f"Bankroll updated to ${new_bankroll:.2f}")
                 st.rerun()
         with col3:
-            st.metric("Profit/Loss", f"${profit:.2f}" if bets else "$0.00")
+            pnl = profit if bets else 0.0
+            st.metric("Profit/Loss", f"${pnl:.2f}")
 
     st.markdown("---")
 
@@ -1644,11 +1709,14 @@ def dashboard():
                     odds_map = {"Home Win": home_odds, "Draw": draw_odds, "Away Win": away_odds}
                     selected_odds = odds_map.get(outcome, 0)
 
-                    implied_prob = 1 / selected_odds if selected_odds > 0 else 0
-                    edge = random.uniform(0.02, 0.05)
-                    true_prob = implied_prob * (1 + edge)
-                    ev = (true_prob * selected_odds) - 1
-                    ev_percent = ev * 100
+                    if selected_odds > 0:
+                        implied_prob = 1 / selected_odds
+                        edge = random.uniform(0.02, 0.05)
+                        true_prob = implied_prob * (1 + edge)
+                        ev = (true_prob * selected_odds) - 1
+                        ev_percent = ev * 100
+                    else:
+                        ev_percent = 0
 
                     add_bet(st.session_state.user_id, {
                         'sport': sport,
@@ -1682,19 +1750,43 @@ def dashboard():
             col1.metric(t['total_bets'], summary['total'])
             col2.metric("Wins", summary['wins'])
             col3.metric("Losses", summary['losses'])
-            col4.metric(t['avg_roi'], f"{summary['win_rate']:.1f}%")
+            col4.metric("Win Rate", f"{summary['win_rate']:.1f}%")
             col5.metric("Net Profit", f"${summary['net_profit']:.2f}")
 
             st.markdown("---")
 
             # Filters
-            filter_result = st.selectbox("Filter by Result", ["All", "Pending", "Win", "Loss"])
-            filtered_bets = bets if filter_result == "All" else [b for b in bets if b[10] == filter_result]
+            filter_result = st.selectbox(
+                t.get('filter_label', 'Filter by Result'),
+                [
+                    t.get('filter_all', 'All'),
+                    t.get('filter_pending', 'Pending'),
+                    t.get('filter_win', 'Win'),
+                    t.get('filter_loss', 'Loss')
+                ]
+            )
+            
+            filter_map = {
+                t.get('filter_all', 'All'): 'All',
+                t.get('filter_pending', 'Pending'): 'Pending',
+                t.get('filter_win', 'Win'): 'Win',
+                t.get('filter_loss', 'Loss'): 'Loss'
+            }
+            
+            filter_value = filter_map.get(filter_result, 'All')
+            filtered_bets = bets if filter_value == 'All' else [b for b in bets if b[10] == filter_value]
 
             if filtered_bets:
                 data = []
                 for bet in filtered_bets:
-                    bet_type_display = "🔒 Arb" if (len(bet) > 13 and bet[13] == 'arbitrage') else ("📝 Manual" if (len(bet) > 13 and bet[13] == 'manual') else "⚡ EV")
+                    bet_type_raw = bet[13] if len(bet) > 13 else 'ev'
+                    if bet_type_raw == 'arbitrage':
+                        bet_type_display = t.get('type_arb', '🔒 Arb')
+                    elif bet_type_raw == 'manual':
+                        bet_type_display = t.get('type_manual', '📝 Manual')
+                    else:
+                        bet_type_display = t.get('type_ev', '⚡ EV')
+                    
                     data.append({
                         'ID': bet[0],
                         'Date': bet[2][:16] if bet[2] else '',
@@ -1738,7 +1830,7 @@ def dashboard():
                     new_bankroll = current_bankroll + profit_loss
                     update_user_bankroll(st.session_state.user_id, new_bankroll)
 
-                    st.success(f"✅ Bet updated! Bankroll adjusted by {profit_loss:.2f}")
+                    st.success(f"✅ Bet updated! Bankroll adjusted by ${profit_loss:.2f}")
                     st.rerun()
             else:
                 st.info(t['no_pending'])
@@ -1779,19 +1871,14 @@ Generated by {COMPANY_NAME} · {DOMAIN}
 
             st.markdown(f'<div class="slip-preview">{slip_text}</div>', unsafe_allow_html=True)
 
-            col_dl1, col_dl2 = st.columns(2)
-            with col_dl1:
-                st.download_button(
-                    label=t['download_slip'],
-                    data=slip_text,
-                    file_name=f"slip_{bet[0]}.txt",
-                    mime="text/plain",
-                    use_container_width=True,
-                    type="primary"
-                )
-            with col_dl2:
-                if st.button("📋 Copy to Clipboard", use_container_width=True):
-                    st.success("Slip copied to clipboard!")
+            st.download_button(
+                label=t['download_slip'],
+                data=slip_text,
+                file_name=f"slip_{bet[0]}.txt",
+                mime="text/plain",
+                use_container_width=True,
+                type="primary"
+            )
         else:
             st.info(t['no_pending_slips'])
 
