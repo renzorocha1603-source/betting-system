@@ -1260,14 +1260,44 @@ def generate_arbitrage_opportunities(count, target_stake):
 # Uses ODDS_API_KEY from st.secrets / env, set up earlier.
 # Cached for 60s so reruns/tab-switches don't burn API credits.
 # ─────────────────────────────────────────────────────────────
-SPORT_OPTIONS = {
+
+# Fallback list only used if the live /sports call fails (e.g. no key yet) —
+# the real, current list always comes from the API itself, not from here.
+FALLBACK_SPORT_OPTIONS = {
     "Soccer — EPL": "soccer_epl",
-    "Soccer — Champions League": "soccer_uefa_champs_league",
-    "Soccer — La Liga": "soccer_spain_la_liga",
     "Basketball — NBA": "basketball_nba",
     "American Football — NFL": "americanfootball_nfl",
     "Ice Hockey — NHL": "icehockey_nhl",
 }
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_available_sports():
+    """Pulls the sports your key can actually see, straight from the API.
+    /v4/sports does not cost quota credits, so it's safe to call often.
+    Returns (dict of "Group — Title": sport_key, error_message)."""
+    if not ODDS_API_KEY:
+        return None, "No Odds API key found in st.secrets / environment."
+    url = "https://api.the-odds-api.com/v4/sports"
+    try:
+        resp = requests.get(url, params={"apiKey": ODDS_API_KEY}, timeout=12)
+    except requests.RequestException as e:
+        return None, f"Network error reaching Odds API: {e}"
+    if resp.status_code == 401:
+        return None, "Odds API rejected the key (401). Check ODDS_API_KEY in secrets."
+    if resp.status_code != 200:
+        return None, f"Odds API error {resp.status_code}: {resp.text[:200]}"
+    try:
+        sports = resp.json()
+    except ValueError:
+        return None, "Odds API returned a non-JSON response."
+
+    options = {}
+    for s in sports:
+        if not s.get("active", True):
+            continue
+        label = f"{s.get('group', 'Other')} — {s.get('title', s.get('key'))}"
+        options[label] = s["key"]
+    return dict(sorted(options.items())), None
 
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_live_odds(sport_key, regions="uk,eu,us"):
@@ -1291,14 +1321,24 @@ def fetch_live_odds(sport_key, regions="uk,eu,us"):
     except ValueError:
         return None, "Odds API returned a non-JSON response."
 
+MIN_BOOKS_FOR_SIGNAL = 4      # too few quotes = consensus isn't trustworthy
+MAX_PLAUSIBLE_EV_PERCENT = 20  # real markets essentially never leave more than this on the table;
+                                # higher usually means a stale/mispriced outlier, not a real edge
+
 def find_live_ev_bets(events, min_ev_percent, target_stake):
-    """De-vigs every bookmaker's own line to build a consensus 'fair' probability
-    per outcome, then flags the best publicly available price on any outcome
-    whose payout exceeds that fair probability by at least min_ev_percent."""
+    """De-vigs every OTHER bookmaker's line (leave-one-out — a book's own price
+    never counts toward its own 'fair value') to build a consensus per outcome,
+    then flags a price that beats that consensus by at least min_ev_percent.
+    Requires several independent bookmakers per event; skips events too thin
+    to trust, and discards anything above a sanity ceiling as a likely bad
+    price rather than a real edge."""
     results = []
     for event in events or []:
         home, away = event.get('home_team', ''), event.get('away_team', '')
-        outcome_probs, outcome_best = {}, {}
+        if len(event.get('bookmakers', [])) < MIN_BOOKS_FOR_SIGNAL:
+            continue
+
+        outcome_quotes, outcome_best = {}, {}  # outcome_quotes[name] = [(book, devigged_prob), ...]
         for bm in event.get('bookmakers', []):
             book = bm.get('title', bm.get('key', ''))
             for market in bm.get('markets', []):
@@ -1310,16 +1350,19 @@ def find_live_ev_bets(events, min_ev_percent, target_stake):
                     continue
                 for o in outcomes:
                     devigged = (1 / o['price']) / total_implied
-                    outcome_probs.setdefault(o['name'], []).append(devigged)
+                    outcome_quotes.setdefault(o['name'], []).append((book, devigged))
                     if o['name'] not in outcome_best or o['price'] > outcome_best[o['name']][0]:
                         outcome_best[o['name']] = (o['price'], book)
+
         for name, (price, book) in outcome_best.items():
-            probs = outcome_probs.get(name, [])
-            if not probs:
+            quotes = outcome_quotes.get(name, [])
+            # leave-one-out: exclude the candidate book's own price from its fair-value estimate
+            other_probs = [p for b, p in quotes if b != book]
+            if len(other_probs) < MIN_BOOKS_FOR_SIGNAL - 1:
                 continue
-            fair_prob = sum(probs) / len(probs)
+            fair_prob = sum(other_probs) / len(other_probs)
             ev_percent = ((fair_prob * price) - 1) * 100
-            if ev_percent >= min_ev_percent:
+            if min_ev_percent <= ev_percent <= MAX_PLAUSIBLE_EV_PERCENT:
                 stake = round(max(5.0, target_stake * random.uniform(0.05, 0.15)), 2)
                 results.append({
                     'type': 'ev', 'source': 'live',
@@ -1529,10 +1572,16 @@ def dashboard():
     with tab1:
         st.markdown(f"### {t['scanner_title']}")
 
+        sport_options, sports_err = fetch_available_sports()
+        if not sport_options:
+            sport_options = FALLBACK_SPORT_OPTIONS
+            if sports_err:
+                st.caption(f"⚠️ Couldn't load your key's full sport list ({sports_err}) — showing a small fallback set.")
+
         col0, col1, col2, col3 = st.columns(4)
         with col0:
-            sport_label = st.selectbox("Sport / League", list(SPORT_OPTIONS.keys()))
-            sport_key = SPORT_OPTIONS[sport_label]
+            sport_label = st.selectbox("Sport / League", list(sport_options.keys()))
+            sport_key = sport_options[sport_label]
         with col1:
             scan_mode = st.selectbox(t['mode'], [t['ev_mode'], t['arbitrage_mode'], t['both_mode']])
         with col2:
