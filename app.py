@@ -24,10 +24,10 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────────────────────
-# HARDCODED API KEYS
+# API KEYS — pulled from environment / Streamlit secrets, never hardcoded
 # ─────────────────────────────────────────────────────────────
-DEEPSEEK_API_KEY = "sk-09832202e2c74c7ea73891197056a8e6"
-ODDS_API_KEY = "a585010a77f214e1ce910e778b079400"
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", st.secrets.get("DEEPSEEK_API_KEY", ""))
+ODDS_API_KEY = os.environ.get("ODDS_API_KEY", st.secrets.get("ODDS_API_KEY", ""))
 
 # ─────────────────────────────────────────────────────────────
 # COMPANY INFO
@@ -37,10 +37,20 @@ DOMAIN = "onlysolutions.ca"
 YEAR = datetime.now().year
 
 # ─────────────────────────────────────────────────────────────
-# THEME TOGGLE
+# SESSION STATE DEFAULTS (must exist before anything reads them)
 # ─────────────────────────────────────────────────────────────
 if 'theme' not in st.session_state:
     st.session_state.theme = "dark"
+if 'lang' not in st.session_state:
+    st.session_state.lang = "en"
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+if 'page' not in st.session_state:
+    st.session_state.page = "landing"
+if 'user_id' not in st.session_state:
+    st.session_state.user_id = None
+if 'is_admin' not in st.session_state:
+    st.session_state.is_admin = 0
 
 def toggle_theme():
     st.session_state.theme = "light" if st.session_state.theme == "dark" else "dark"
@@ -49,13 +59,18 @@ def toggle_theme():
 # ─────────────────────────────────────────────────────────────
 # DATABASE — Users
 # ─────────────────────────────────────────────────────────────
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'users.db')
+
+def get_conn():
+    return sqlite3.connect(DB_PATH)
+
 def init_db():
-    conn = sqlite3.connect('users.db')
+    conn = get_conn()
     c = conn.cursor()
-    
+
     c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
     table_exists = c.fetchone()
-    
+
     if not table_exists:
         c.execute('''
         CREATE TABLE users (
@@ -73,7 +88,7 @@ def init_db():
         columns = [col[1] for col in c.fetchall()]
         if 'is_admin' not in columns:
             c.execute('ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0')
-    
+
     c.execute('''
     CREATE TABLE IF NOT EXISTS bets (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -92,7 +107,7 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id)
     )
     ''')
-    
+
     admin_email = "admin@onlys.com"
     admin_password = hashlib.sha256("admin123".encode()).hexdigest()
     c.execute('SELECT * FROM users WHERE email = ?', (admin_email,))
@@ -101,7 +116,7 @@ def init_db():
         INSERT INTO users (email, password, name, created_at, is_admin)
         VALUES (?, ?, ?, ?, ?)
         ''', (admin_email, admin_password, "Administrator", datetime.now().isoformat(), 1))
-    
+
     conn.commit()
     conn.close()
 
@@ -109,7 +124,7 @@ def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 def create_user(email, password, name):
-    conn = sqlite3.connect('users.db')
+    conn = get_conn()
     c = conn.cursor()
     try:
         c.execute('''
@@ -124,7 +139,7 @@ def create_user(email, password, name):
         conn.close()
 
 def authenticate_user(email, password):
-    conn = sqlite3.connect('users.db')
+    conn = get_conn()
     c = conn.cursor()
     c.execute('SELECT * FROM users WHERE email = ? AND password = ?', (email, hash_password(password)))
     result = c.fetchone()
@@ -134,7 +149,7 @@ def authenticate_user(email, password):
 def get_user_bets(user_id):
     if user_id is None:
         return []
-    conn = sqlite3.connect('users.db')
+    conn = get_conn()
     c = conn.cursor()
     c.execute('SELECT * FROM bets WHERE user_id = ? ORDER BY timestamp DESC', (user_id,))
     rows = c.fetchall()
@@ -144,7 +159,7 @@ def get_user_bets(user_id):
 def add_bet(user_id, bet_data):
     if user_id is None:
         return False
-    conn = sqlite3.connect('users.db')
+    conn = get_conn()
     c = conn.cursor()
     c.execute('''
     INSERT INTO bets (user_id, timestamp, sport, home_team, away_team, outcome, odds, stake, ev_percent, result, return, profit_loss)
@@ -168,7 +183,7 @@ def add_bet(user_id, bet_data):
     return True
 
 def update_bet_result(bet_id, result, return_amount, profit_loss):
-    conn = sqlite3.connect('users.db')
+    conn = get_conn()
     c = conn.cursor()
     c.execute('''
     UPDATE bets SET result = ?, return = ?, profit_loss = ? WHERE id = ?
@@ -181,7 +196,7 @@ def get_bet_summary(bets):
     wins = len([b for b in bets if b[10] == 'Win'])
     losses = len([b for b in bets if b[10] == 'Loss'])
     profit = sum([b[12] for b in bets if b[12] is not None])
-    
+
     return {
         'total': total,
         'wins': wins,
@@ -432,7 +447,7 @@ LANGUAGES = {
 # ─────────────────────────────────────────────────────────────
 def get_theme_css():
     is_dark = st.session_state.theme == "dark"
-    
+
     bg_deep = "#0B0E14" if is_dark else "#F0F4FF"
     bg_surface = "#111927" if is_dark else "#E8EDF5"
     bg_card = "rgba(20, 30, 50, 0.7)" if is_dark else "rgba(220, 235, 255, 0.7)"
@@ -440,13 +455,13 @@ def get_theme_css():
     text_primary = "#F0F4FF" if is_dark else "#0B0E14"
     text_secondary = "#B0C4DE" if is_dark else "#2A3A50"
     text_muted = "#6A8CAE" if is_dark else "#5A6A80"
-    
+
     return f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&family=Orbitron:wght@400;500;600;700;800;900&display=swap');
-    
+
     * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-    
+
     :root {{
         --bg-deep: {bg_deep};
         --bg-surface: {bg_surface};
@@ -466,7 +481,7 @@ def get_theme_css():
         --font-mono: 'JetBrains Mono', monospace;
         --font-display: 'Orbitron', sans-serif;
     }}
-    
+
     html, body, .stApp, .stApp > div, .main, .block-container,
     div[data-testid="stAppViewContainer"],
     div[data-testid="stHeader"],
@@ -475,39 +490,39 @@ def get_theme_css():
         background-color: var(--bg-deep) !important;
         color: var(--text-primary) !important;
     }}
-    
+
     .block-container {{
         padding: 1.5rem 2rem 3rem !important;
         max-width: 1400px !important;
     }}
-    
+
     .stMarkdown, .stText, .stCaption, p, div, span, label, h1, h2, h3, h4, h5, h6 {{
         color: var(--text-primary) !important;
     }}
-    
+
     .stMarkdown p, .stMarkdown li, .stMarkdown div {{
         color: var(--text-secondary) !important;
     }}
-    
+
     .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {{
         color: var(--text-primary) !important;
     }}
-    
+
     label, .stSelectbox label, .stNumberInput label, .stTextInput label {{
         color: var(--text-secondary) !important;
         font-size: 0.65rem !important;
         font-weight: 600 !important;
     }}
-    
+
     .stSelectbox > div > div {{
         color: var(--text-primary) !important;
         background: rgba(0,0,0,0.2) !important;
     }}
-    
+
     ::-webkit-scrollbar {{ width: 4px; height: 4px; }}
     ::-webkit-scrollbar-track {{ background: var(--bg-deep); }}
     ::-webkit-scrollbar-thumb {{ background: var(--cyan); border-radius: 2px; }}
-    
+
     .terminal-nav {{
         display: flex;
         justify-content: space-between;
@@ -582,7 +597,7 @@ def get_theme_css():
         font-size: 0.6rem;
         font-weight: 600;
     }}
-    
+
     .kpi-grid {{
         display: grid;
         grid-template-columns: repeat(4, 1fr);
@@ -622,7 +637,7 @@ def get_theme_css():
     .kpi-card .change {{ font-family: var(--font-mono); font-size: 0.6rem; margin-top: 0.25rem; }}
     .kpi-card .change.positive {{ color: var(--lime); }}
     .kpi-card .change.negative {{ color: var(--red); }}
-    
+
     .ev-banner {{
         background: rgba(0, 243, 255, 0.05);
         border: 1px solid rgba(0, 243, 255, 0.1);
@@ -641,7 +656,7 @@ def get_theme_css():
         flex: 1;
     }}
     .ev-banner .ev-text strong {{ color: var(--cyan); }}
-    
+
     .arb-card {{
         background: var(--bg-card);
         backdrop-filter: blur(20px);
@@ -652,6 +667,30 @@ def get_theme_css():
         transition: all 0.3s ease;
     }}
     .arb-card:hover {{ border-color: var(--cyan); }}
+    .arb-card .arb-header {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+    }}
+    .arb-card .arb-body {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }}
+    .arb-card .odds-grid {{
+        display: flex;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+    }}
+    .arb-card .arb-actions {{
+        display: flex;
+        gap: 0.5rem;
+    }}
     .arb-card .arb-match .teams {{
         font-family: 'Inter', sans-serif;
         font-size: 0.95rem;
@@ -725,7 +764,7 @@ def get_theme_css():
     .arb-card .arb-actions .action-btn.primary:hover {{
         box-shadow: 0 0 30px var(--cyan-glow);
     }}
-    
+
     .hero-section {{
         text-align: center;
         padding: 3rem 2rem;
@@ -759,7 +798,7 @@ def get_theme_css():
         color: var(--lime);
         font-size: 0.7rem;
     }}
-    
+
     .feature-card {{
         background: var(--bg-card);
         backdrop-filter: blur(20px);
@@ -771,7 +810,7 @@ def get_theme_css():
     .feature-card .icon {{ font-size: 2.5rem; margin-bottom: 0.5rem; }}
     .feature-card h3 {{ color: var(--text-primary); font-size: 1rem; }}
     .feature-card p {{ color: var(--text-muted); font-size: 0.8rem; }}
-    
+
     .pricing-card {{
         background: var(--bg-card);
         backdrop-filter: blur(20px);
@@ -802,7 +841,7 @@ def get_theme_css():
         color: var(--text-secondary);
     }}
     .pricing-card .feature-item::before {{ content: "✓ "; color: var(--lime); }}
-    
+
     div[data-testid="stTextInput"] input {{
         background: rgba(0,0,0,0.2) !important;
         border: 1px solid var(--border-glass) !important;
@@ -819,7 +858,7 @@ def get_theme_css():
         font-family: var(--font-mono) !important;
         font-size: 0.6rem !important;
     }}
-    
+
     .stButton button, div[data-testid="stFormSubmitButton"] button {{
         background: linear-gradient(135deg, var(--cyan), #0099CC) !important;
         color: #0B0E14 !important;
@@ -837,7 +876,7 @@ def get_theme_css():
         transform: translateY(-2px) !important;
         box-shadow: 0 0 40px var(--cyan-glow) !important;
     }}
-    
+
     div[data-testid="metric-container"] {{
         background: var(--bg-card) !important;
         border: 1px solid var(--border-glass) !important;
@@ -856,12 +895,12 @@ def get_theme_css():
         font-size: 1.2rem !important;
         font-weight: 700 !important;
     }}
-    
+
     section[data-testid="stSidebar"] {{
         background: var(--bg-surface) !important;
         border-right: 1px solid var(--border-glass) !important;
     }}
-    
+
     .stTabs [data-baseweb="tab-list"] {{
         gap: 0 !important;
         border-bottom: 1px solid var(--border-glass) !important;
@@ -878,7 +917,7 @@ def get_theme_css():
         color: var(--cyan) !important;
         border-bottom: 2px solid var(--cyan) !important;
     }}
-    
+
     .stSelectbox > div > div {{
         background: rgba(0,0,0,0.2) !important;
         border: 1px solid var(--border-glass) !important;
@@ -888,17 +927,17 @@ def get_theme_css():
     .stSelectbox label {{
         color: var(--text-secondary) !important;
     }}
-    
+
     .stSlider div[data-baseweb="slider"] {{ background: var(--border-glass) !important; }}
     .stSlider div[data-baseweb="slider"] div {{ background: var(--cyan) !important; box-shadow: 0 0 15px var(--cyan-glow) !important; }}
-    
+
     .stAlert {{
         background: var(--bg-card) !important;
         border: 1px solid var(--border-glass) !important;
         border-radius: var(--card-radius) !important;
     }}
     .stAlert .stMarkdown {{ color: var(--text-secondary) !important; }}
-    
+
     .faq-container {{
         background: var(--bg-card);
         backdrop-filter: blur(20px);
@@ -919,12 +958,49 @@ def get_theme_css():
         font-size: 0.9rem;
         line-height: 1.5;
     }}
-    
+
+    .slip-preview {{
+        background: var(--bg-card);
+        backdrop-filter: blur(20px);
+        border: 1px dashed var(--border-glass);
+        border-radius: var(--card-radius);
+        padding: 1.5rem;
+        font-family: var(--font-mono);
+        color: var(--text-secondary);
+        white-space: pre-wrap;
+        line-height: 1.6;
+    }}
+
     #MainMenu, footer, header {{ visibility: hidden !important; display: none !important; }}
     </style>
     """
-    
+
 st.markdown(get_theme_css(), unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────
+# LANGUAGE / THEME TOGGLE BAR (shared across public pages)
+# ─────────────────────────────────────────────────────────────
+def render_top_bar(key_suffix):
+    lang = st.session_state.get('lang', 'en')
+    t = LANGUAGES[lang]
+
+    col_lang1, col_lang2, col_lang3, col_lang4, col_lang5 = st.columns([8, 0.8, 0.8, 0.8, 0.8])
+    with col_lang2:
+        if st.button(t['lang_en'], key=f"lang_en_{key_suffix}"):
+            st.session_state.lang = "en"
+            st.rerun()
+    with col_lang3:
+        if st.button(t['lang_fr'], key=f"lang_fr_{key_suffix}"):
+            st.session_state.lang = "fr"
+            st.rerun()
+    with col_lang4:
+        if st.button(t['lang_es'], key=f"lang_es_{key_suffix}"):
+            st.session_state.lang = "es"
+            st.rerun()
+    with col_lang5:
+        theme_label = t['theme_light'] if st.session_state.theme == "dark" else t['theme_dark']
+        if st.button(theme_label, key=f"theme_{key_suffix}"):
+            toggle_theme()
 
 # ─────────────────────────────────────────────────────────────
 # LANDING PAGE
@@ -932,25 +1008,9 @@ st.markdown(get_theme_css(), unsafe_allow_html=True)
 def landing_page():
     lang = st.session_state.get('lang', 'en')
     t = LANGUAGES[lang]
-    
-    col_lang1, col_lang2, col_lang3, col_lang4, col_lang5 = st.columns([8, 0.8, 0.8, 0.8, 0.8])
-    with col_lang2:
-        if st.button(t['lang_en'], key="lang_en_landing"):
-            st.session_state.lang = "en"
-            st.rerun()
-    with col_lang3:
-        if st.button(t['lang_fr'], key="lang_fr_landing"):
-            st.session_state.lang = "fr"
-            st.rerun()
-    with col_lang4:
-        if st.button(t['lang_es'], key="lang_es_landing"):
-            st.session_state.lang = "es"
-            st.rerun()
-    with col_lang5:
-        theme_label = t['theme_light'] if st.session_state.theme == "dark" else t['theme_dark']
-        if st.button(theme_label, key="theme_landing"):
-            toggle_theme()
-    
+
+    render_top_bar("landing")
+
     st.markdown(f"""
     <div class="hero-section">
         <h1>{t['title']}</h1>
@@ -961,7 +1021,7 @@ def landing_page():
         </div>
     </div>
     """, unsafe_allow_html=True)
-    
+
     col1, col2, col3 = st.columns(3)
     features = [
         ("🎯", "EV Scanner", "Find positive expected value bets automatically"),
@@ -977,9 +1037,9 @@ def landing_page():
                 <p>{desc}</p>
             </div>
             """, unsafe_allow_html=True)
-    
+
     st.markdown("---")
-    
+
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
         st.markdown(f"""
@@ -997,20 +1057,25 @@ def landing_page():
             </div>
         </div>
         """, unsafe_allow_html=True)
-        
+
         if st.button(t['free_trial'], use_container_width=True, type="primary"):
             st.session_state.page = "signup"
             st.rerun()
-        
+
         st.markdown(f"""
         <div style="text-align:center; color:var(--text-muted); font-size:0.7rem; padding:0.5rem 0;">
             {t['free_trial_note']}
         </div>
         """, unsafe_allow_html=True)
-    
+
+    st.markdown("---")
+    if st.button(t['already_account'], use_container_width=True):
+        st.session_state.page = "login"
+        st.rerun()
+
     st.markdown("---")
     st.markdown(f"## {t['faq_title']}")
-    
+
     faqs = [
         (t['faq_q1'], t['faq_a1']),
         (t['faq_q2'], t['faq_a2']),
@@ -1018,7 +1083,7 @@ def landing_page():
         (t['faq_q4'], t['faq_a4']),
         (t['faq_q5'], t['faq_a5'])
     ]
-    
+
     for q, a in faqs:
         st.markdown(f"""
         <div class="faq-container">
@@ -1026,7 +1091,7 @@ def landing_page():
             <div class="faq-a">{a}</div>
         </div>
         """, unsafe_allow_html=True)
-    
+
     st.markdown(f"""
     <div style="text-align:center; color:var(--text-muted); font-size:0.7rem; padding:2rem 0; border-top:1px solid var(--border-glass); margin-top:1rem;">
         {t['footer']}
@@ -1039,34 +1104,18 @@ def landing_page():
 def signup_page():
     lang = st.session_state.get('lang', 'en')
     t = LANGUAGES[lang]
-    
-    col_lang1, col_lang2, col_lang3, col_lang4, col_lang5 = st.columns([8, 0.8, 0.8, 0.8, 0.8])
-    with col_lang2:
-        if st.button(t['lang_en'], key="lang_en_signup"):
-            st.session_state.lang = "en"
-            st.rerun()
-    with col_lang3:
-        if st.button(t['lang_fr'], key="lang_fr_signup"):
-            st.session_state.lang = "fr"
-            st.rerun()
-    with col_lang4:
-        if st.button(t['lang_es'], key="lang_es_signup"):
-            st.session_state.lang = "es"
-            st.rerun()
-    with col_lang5:
-        theme_label = t['theme_light'] if st.session_state.theme == "dark" else t['theme_dark']
-        if st.button(theme_label, key="theme_signup"):
-            toggle_theme()
-    
+
+    render_top_bar("signup")
+
     st.markdown(f"### {t['signup_title']}")
     st.markdown(t['signup_subtitle'])
-    
+
     with st.form("signup_form"):
         name = st.text_input(t['name'], placeholder="John Doe")
         email = st.text_input(t['email'], placeholder="you@example.com")
         password = st.text_input(t['password'], type="password", placeholder="••••••••")
         confirm = st.text_input(t['confirm'], type="password", placeholder="••••••••")
-        
+
         if st.form_submit_button(t['free_trial'], use_container_width=True, type="primary"):
             if not name or not email or not password:
                 st.error(t['signup_error'])
@@ -1081,7 +1130,7 @@ def signup_page():
                     st.rerun()
                 else:
                     st.error(t['email_exists'])
-    
+
     st.markdown("---")
     if st.button(t['already_account'], use_container_width=True):
         st.session_state.page = "login"
@@ -1093,31 +1142,15 @@ def signup_page():
 def login_page():
     lang = st.session_state.get('lang', 'en')
     t = LANGUAGES[lang]
-    
-    col_lang1, col_lang2, col_lang3, col_lang4, col_lang5 = st.columns([8, 0.8, 0.8, 0.8, 0.8])
-    with col_lang2:
-        if st.button(t['lang_en'], key="lang_en_login"):
-            st.session_state.lang = "en"
-            st.rerun()
-    with col_lang3:
-        if st.button(t['lang_fr'], key="lang_fr_login"):
-            st.session_state.lang = "fr"
-            st.rerun()
-    with col_lang4:
-        if st.button(t['lang_es'], key="lang_es_login"):
-            st.session_state.lang = "es"
-            st.rerun()
-    with col_lang5:
-        theme_label = t['theme_light'] if st.session_state.theme == "dark" else t['theme_dark']
-        if st.button(theme_label, key="theme_login"):
-            toggle_theme()
-    
+
+    render_top_bar("login")
+
     st.markdown(f"### {t['login_title']}")
-    
+
     with st.form("login_form"):
         email = st.text_input(t['email'], placeholder="you@example.com")
         password = st.text_input(t['password'], type="password", placeholder="••••••••")
-        
+
         if st.form_submit_button(t['sign_in'], use_container_width=True, type="primary"):
             user = authenticate_user(email, password)
             if user:
@@ -1129,7 +1162,7 @@ def login_page():
                 st.rerun()
             else:
                 st.error(t['login_error'])
-    
+
     st.markdown("---")
     if st.button(t['create_account'], use_container_width=True):
         st.session_state.page = "signup"
@@ -1141,31 +1174,21 @@ def login_page():
 def dashboard():
     lang = st.session_state.get('lang', 'en')
     t = LANGUAGES[lang]
-    
+
     if 'user_id' not in st.session_state or st.session_state.user_id is None:
         st.error("User session error. Please log in again.")
         st.session_state.authenticated = False
         st.rerun()
         return
-    
-    col_lang1, col_lang2, col_lang3, col_lang4, col_lang5 = st.columns([8, 0.8, 0.8, 0.8, 0.8])
-    with col_lang2:
-        if st.button(t['lang_en'], key="lang_en_dash"):
-            st.session_state.lang = "en"
-            st.rerun()
-    with col_lang3:
-        if st.button(t['lang_fr'], key="lang_fr_dash"):
-            st.session_state.lang = "fr"
-            st.rerun()
-    with col_lang4:
-        if st.button(t['lang_es'], key="lang_es_dash"):
-            st.session_state.lang = "es"
-            st.rerun()
-    with col_lang5:
-        theme_label = t['theme_light'] if st.session_state.theme == "dark" else t['theme_dark']
-        if st.button(theme_label, key="theme_dash"):
-            toggle_theme()
-    
+
+    render_top_bar("dash")
+
+    if st.button("🚪 Log Out", key="logout_btn"):
+        st.session_state.authenticated = False
+        st.session_state.user_id = None
+        st.session_state.page = "landing"
+        st.rerun()
+
     st.markdown(f"""
     <div class="terminal-nav">
         <div class="terminal-logo">
@@ -1186,9 +1209,9 @@ def dashboard():
         </div>
     </div>
     """, unsafe_allow_html=True)
-    
+
     bets = get_user_bets(st.session_state.user_id)
-    
+
     if bets:
         summary = get_bet_summary(bets)
         total_bets = summary['total']
@@ -1196,7 +1219,7 @@ def dashboard():
         losses = summary['losses']
         profit = summary['net_profit']
         win_rate = summary['win_rate']
-        
+
         st.markdown(f"""
         <div class="kpi-grid">
             <div class="kpi-card">
@@ -1230,16 +1253,16 @@ def dashboard():
             <div class="kpi-card"><div class="label">Avg EV</div><div class="value purple">0%</div><div class="change">Scan to find value</div></div>
         </div>
         """, unsafe_allow_html=True)
-    
+
     st.markdown("---")
-    
+
     st.markdown(f"""
     <div class="ev-banner">
         <span class="ev-icon">💡</span>
         <span class="ev-text"><strong>{t['ev_explained']}</strong> {t['ev_explanation']}</span>
     </div>
     """, unsafe_allow_html=True)
-    
+
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "🎯 Scanner",
         "📝 Manual",
@@ -1247,11 +1270,11 @@ def dashboard():
         "📄 Slip",
         "❓ FAQ"
     ])
-    
+
     # ─── TAB 1: SCANNER ──────────────────────────────────────
     with tab1:
         st.markdown(f"### {t['scanner_title']}")
-        
+
         col1, col2, col3 = st.columns(3)
         with col1:
             scan_mode = st.selectbox(t['mode'], [t['ev_mode'], t['arbitrage_mode'], t['both_mode']])
@@ -1259,11 +1282,11 @@ def dashboard():
             min_ev = st.slider(t['min_ev'], 1, 20, 5, 1)
         with col3:
             target_stake = st.number_input(t['stake_label'], min_value=10, value=100, step=10)
-        
+
         if st.button(t['scan_btn'], use_container_width=True, type="primary"):
             with st.spinner("Scanning 70+ bookmakers..."):
                 sample_bets = []
-                
+
                 ev_options = [3.2, 4.1, 5.8, 6.7, 8.2, 9.5, 10.1, 12.3]
                 odds_options = [2.14, 3.44, 6.88, 8.20, 2.99, 3.15, 5.50, 4.80]
                 outcomes = ['Draw', 'Home Win', 'Away Win']
@@ -1278,17 +1301,17 @@ def dashboard():
                     ('Norwich', 'Watford'),
                     ('Chelsea', 'West Ham')
                 ]
-                
+
                 for i in range(5):
                     match = random.choice(matches)
                     odds = random.choice(odds_options)
                     ev = random.choice(ev_options)
                     outcome = random.choice(outcomes)
                     book = random.choice(books)
-                    
+
                     stake = round(10 + (ev / 2), 2)
                     potential_return = round(stake * odds, 2)
-                    
+
                     sample_bets.append({
                         'match': f"{match[0]} vs {match[1]}",
                         'outcome': outcome,
@@ -1299,7 +1322,7 @@ def dashboard():
                         'potential_return': potential_return,
                         'book': book
                     })
-                
+
                 for bet in sample_bets:
                     add_bet(st.session_state.user_id, {
                         'sport': 'Soccer',
@@ -1313,17 +1336,17 @@ def dashboard():
                         'return': 0,
                         'profit_loss': 0
                     })
-                
+
                 st.session_state.scan_results = sample_bets
                 st.success(f"✅ Found {len(sample_bets)} value bets!")
                 st.rerun()
-        
+
         if 'scan_results' in st.session_state and st.session_state.scan_results:
             st.markdown(f"### {t['best_ev_bets']}")
-            
+
             total_stake = 0
             total_return = 0
-            
+
             for i, bet in enumerate(st.session_state.scan_results[:5], 1):
                 profit = bet['potential_return'] - bet['stake']
                 st.markdown(f"""
@@ -1343,17 +1366,13 @@ def dashboard():
                             <div class="odd-cell"><span class="odd-label">Return</span><span class="odd-value" style="color:var(--lime);">${bet['potential_return']:.2f}</span></div>
                             <div class="odd-cell"><span class="odd-label">Profit</span><span class="odd-value" style="color:var(--cyan);">+${profit:.2f}</span></div>
                         </div>
-                        <div class="arb-actions">
-                            <button class="action-btn primary">📄 Slip</button>
-                            <button class="action-btn">ℹ️ Info</button>
-                        </div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-                
+
                 total_stake += bet['stake']
                 total_return += bet['potential_return']
-            
+
             st.markdown(f"""
             <div style="background:var(--bg-card); border:1px solid var(--border-glass); border-radius:var(--card-radius); padding:1rem 1.5rem; margin-top:0.5rem;">
                 <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:1rem;">
@@ -1367,11 +1386,11 @@ def dashboard():
                 </div>
             </div>
             """, unsafe_allow_html=True)
-    
+
     # ─── TAB 2: MANUAL ──────────────────────────────────────
     with tab2:
         st.markdown(f"### {t['manual_title']}")
-        
+
         with st.form("manual_form"):
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -1383,21 +1402,21 @@ def dashboard():
             with col3:
                 draw_odds = st.number_input(t['draw_odds'], min_value=1.01, step=0.01, value=3.20)
                 away_odds = st.number_input(t['away_odds'], min_value=1.01, step=0.01, value=2.80)
-            
+
             outcome = st.selectbox(t['your_bet'], ["Home Win", "Draw", "Away Win"])
             stake = st.number_input(t['your_stake'], min_value=1.0, step=1.0, value=10.0)
-            
+
             if st.form_submit_button(t['add_bet'], use_container_width=True, type="primary"):
                 if home_team and away_team and st.session_state.user_id:
                     odds_map = {"Home Win": home_odds, "Draw": draw_odds, "Away Win": away_odds}
                     selected_odds = odds_map.get(outcome, 0)
-                    
+
                     implied_prob = 1 / selected_odds if selected_odds > 0 else 0
                     edge = random.uniform(0.02, 0.05)
                     true_prob = implied_prob * (1 + edge)
                     ev = (true_prob * selected_odds) - 1
                     ev_percent = ev * 100
-                    
+
                     add_bet(st.session_state.user_id, {
                         'sport': sport,
                         'home_team': home_team,
@@ -1410,28 +1429,28 @@ def dashboard():
                         'return': 0,
                         'profit_loss': 0
                     })
-                    
+
                     st.success(t['bet_added'].format(home=home_team, away=away_team, outcome=outcome, odds=selected_odds))
                     st.rerun()
-    
+
     # ─── TAB 3: HISTORY ──────────────────────────────────────
     with tab3:
         st.markdown(f"### {t['history_title']}")
-        
+
         bets = get_user_bets(st.session_state.user_id)
-        
+
         if bets:
             summary = get_bet_summary(bets)
-            
+
             col1, col2, col3, col4, col5 = st.columns(5)
             col1.metric("Total Bets", summary['total'])
             col2.metric("Wins", summary['wins'])
             col3.metric("Losses", summary['losses'])
             col4.metric("Win Rate", f"{summary['win_rate']:.1f}%")
             col5.metric("Net Profit", f"${summary['net_profit']:.2f}")
-            
+
             st.markdown("---")
-            
+
             data = []
             for bet in bets:
                 data.append({
@@ -1447,33 +1466,117 @@ def dashboard():
                     'Result': bet[10],
                     'P/L': f"${bet[12]:.2f}" if bet[12] != 0 else "Pending"
                 })
-            
+
             df = pd.DataFrame(data)
             st.dataframe(df, use_container_width=True)
-            
+
             st.markdown("---")
             st.markdown(f"### {t['update_result']}")
-            
+
             pending = [b for b in bets if b[10] == 'Pending']
             if pending:
                 options = {f"ID {b[0]}: {b[4]} vs {b[5]}": b[0] for b in pending}
                 selected = st.selectbox(t['select_bet'], list(options.keys()))
                 bet_id = options[selected]
-                
+
                 result = st.selectbox(t['result'], ["Win", "Loss"])
                 return_amount = st.number_input(t['return_amount'], min_value=0.0, step=0.01)
-                
+
                 if st.button(t['update_btn'], use_container_width=True, type="primary"):
                     stake = [b[8] for b in bets if b[0] == bet_id][0]
                     if result == "Win":
                         profit_loss = return_amount - stake
                     else:
                         profit_loss = -stake
-                    
+
                     update_bet_result(bet_id, result, return_amount, profit_loss)
                     st.success("✅ Bet updated!")
                     st.rerun()
             else:
                 st.info(t['no_pending'])
         else:
-            st.info
+            st.info(t['no_bets'])
+
+    # ─── TAB 4: SLIP ─────────────────────────────────────────
+    with tab4:
+        st.markdown(f"### {t['slip_title']}")
+
+        bets = get_user_bets(st.session_state.user_id)
+        pending = [b for b in bets if b[10] == 'Pending']
+
+        if pending:
+            options = {f"ID {b[0]}: {b[4]} vs {b[5]} — {b[6]} @ {b[7]}": b for b in pending}
+            selected_label = st.selectbox(t['select_bet'], list(options.keys()), key="slip_select")
+            bet = options[selected_label]
+
+            slip_text = f"""
+╔════════════════════════════════════╗
+  {COMPANY_NAME.upper()}
+  BUDGET SYSTEM · PAPER SLIP
+╚════════════════════════════════════╝
+
+Bet ID:      #{bet[0]}
+Date:        {bet[2][:16]}
+Sport:       {bet[3]}
+Match:       {bet[4]} vs {bet[5]}
+Selection:   {bet[6]}
+Odds:        {bet[7]}
+Stake:       ${bet[8]:.2f}
+Est. EV:     {bet[9]:.1f}%
+Potential:   ${bet[7] * bet[8]:.2f}
+Status:      {bet[10]}
+
+Generated by {COMPANY_NAME} · {DOMAIN}
+""".strip()
+
+            st.markdown(f'<div class="slip-preview">{slip_text}</div>', unsafe_allow_html=True)
+
+            st.download_button(
+                label=t['download_slip'],
+                data=slip_text,
+                file_name=f"slip_{bet[0]}.txt",
+                mime="text/plain",
+                use_container_width=True,
+                type="primary"
+            )
+        else:
+            st.info(t['no_pending_slips'])
+
+    # ─── TAB 5: FAQ ──────────────────────────────────────────
+    with tab5:
+        st.markdown(f"### {t['faq_title']}")
+
+        faqs = [
+            (t['faq_q1'], t['faq_a1']),
+            (t['faq_q2'], t['faq_a2']),
+            (t['faq_q3'], t['faq_a3']),
+            (t['faq_q4'], t['faq_a4']),
+            (t['faq_q5'], t['faq_a5'])
+        ]
+
+        for q, a in faqs:
+            st.markdown(f"""
+            <div class="faq-container">
+                <div class="faq-q">❓ {q}</div>
+                <div class="faq-a">{a}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────
+# MAIN ENTRY POINT / ROUTING
+# This block was missing from the previous version — without it,
+# none of the page functions above ever get called, and the app
+# just renders the CSS (near-black background) with no content.
+# ─────────────────────────────────────────────────────────────
+init_db()
+
+if not st.session_state.authenticated:
+    current_page = st.session_state.get('page', 'landing')
+    if current_page == 'signup':
+        signup_page()
+    elif current_page == 'login':
+        login_page()
+    else:
+        landing_page()
+else:
+    dashboard()
