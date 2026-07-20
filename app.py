@@ -7,6 +7,7 @@ import requests
 import re
 import io
 import time
+import threading
 from datetime import datetime, timedelta
 from PIL import Image
 import os
@@ -28,6 +29,8 @@ st.set_page_config(
 # ─────────────────────────────────────────────────────────────
 DEEPSEEK_API_KEY = "sk-09832202e2c74c7ea73891197056a8e6"
 ODDS_API_KEY = "a585010a77f214e1ce910e778b079400"
+TELEGRAM_BOT_TOKEN = ""  # Add your Telegram bot token here for alerts
+TELEGRAM_CHAT_ID = ""    # Add your Telegram chat ID here
 
 # ─────────────────────────────────────────────────────────────
 # SIDEBAR — SETTINGS
@@ -42,6 +45,20 @@ with st.sidebar:
     st.caption("v5.0 · Only Solutions Inc.")
 
 # ─────────────────────────────────────────────────────────────
+# TELEGRAM ALERT FUNCTION (PASSIVE)
+# ─────────────────────────────────────────────────────────────
+def send_telegram_alert(message: str):
+    """Send alert via Telegram"""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+    
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        requests.post(url, json={'chat_id': TELEGRAM_CHAT_ID, 'text': message}, timeout=5)
+    except Exception as e:
+        print(f"Telegram error: {e}")
+
+# ─────────────────────────────────────────────────────────────
 # ARBITRAGE SCANNER ENGINE
 # ─────────────────────────────────────────────────────────────
 class SportsBookScanner:
@@ -52,7 +69,6 @@ class SportsBookScanner:
         self.markets = markets
 
     def get_active_sports(self) -> list:
-        """Fetches all currently active sports."""
         if not self.api_key or self.api_key == "YOUR_ODDS_API_KEY_HERE":
             return ["soccer_epl", "soccer_uefa_champs_league", "icehockey_nhl", "basketball_nba"]
         
@@ -62,12 +78,10 @@ class SportsBookScanner:
             if response.status_code == 200:
                 return [sport['key'] for sport in response.json()]
             return []
-        except Exception as e:
-            st.error(f"API Error: {e}")
+        except Exception:
             return []
 
     def fetch_live_odds(self, sport: str) -> list:
-        """Fetches real-time odds for a specific sport."""
         if not self.api_key or self.api_key == "YOUR_ODDS_API_KEY_HERE":
             return self.get_sample_data(sport)
         
@@ -82,13 +96,11 @@ class SportsBookScanner:
             response = requests.get(url, params=params, timeout=10)
             if response.status_code == 200:
                 return response.json()
-            else:
-                return []
-        except Exception as e:
+            return []
+        except Exception:
             return []
 
     def get_sample_data(self, sport: str) -> list:
-        """Return sample data for demo purposes"""
         sample_events = [
             {
                 "id": "sample_1",
@@ -201,7 +213,6 @@ class SportsBookScanner:
 class ArbitrageEngine:
     @staticmethod
     def calculate_arbitrage(home_odds: float, away_odds: float, draw_odds: float = None) -> dict:
-        """Calculates if an arbitrage opportunity exists."""
         if home_odds <= 0 or away_odds <= 0:
             return None
         
@@ -233,12 +244,10 @@ class ArbitrageEngine:
 
     @staticmethod
     def allocate_stakes(total_stake: float, weights: dict) -> dict:
-        """Calculates exact dollar amounts to wager."""
         return {outcome: round(total_stake * weight, 2) for outcome, weight in weights.items() if weight > 0}
 
     @staticmethod
     def round_stakes(stakes: dict, increment: float = 5.0) -> dict:
-        """Rounds stakes to nearest increment to avoid detection."""
         rounded = {}
         total = sum(stakes.values())
         
@@ -254,6 +263,89 @@ class ArbitrageEngine:
         
         return rounded
 
+# ─────────────────────────────────────────────────────────────
+# CRYPTO ARBITRAGE SCANNER (PASSIVE)
+# ─────────────────────────────────────────────────────────────
+class CryptoArbitrageScanner:
+    def __init__(self):
+        self.exchanges = {
+            "binance": "https://api.binance.com/api/v3/ticker/price",
+            "coinbase": "https://api.coinbase.com/v2/prices/",
+            "kraken": "https://api.kraken.com/0/public/Ticker",
+            "huobi": "https://api.huobi.pro/market/tickers",
+        }
+    
+    def get_price_binance(self, symbol="BTCUSDT"):
+        try:
+            response = requests.get(f"{self.exchanges['binance']}?symbol={symbol}", timeout=5)
+            return float(response.json()['price'])
+        except:
+            return None
+    
+    def get_price_coinbase(self, symbol="BTC-USD"):
+        try:
+            response = requests.get(f"{self.exchanges['coinbase']}{symbol}/spot", timeout=5)
+            return float(response.json()['data']['amount'])
+        except:
+            return None
+    
+    def get_price_kraken(self, symbol="XBTUSD"):
+        try:
+            response = requests.get(f"{self.exchanges['kraken']}?pair={symbol}", timeout=5)
+            return float(response.json()['result'][symbol]['c'][0])
+        except:
+            return None
+    
+    def scan_crypto_arbitrage(self, min_profit=0.5):
+        opportunities = []
+        
+        # Get BTC prices from multiple exchanges
+        prices = {
+            "binance": self.get_price_binance("BTCUSDT"),
+            "coinbase": self.get_price_coinbase("BTC-USD"),
+            "kraken": self.get_price_kraken("XBTUSD"),
+        }
+        
+        # Filter out None values
+        valid_prices = {k: v for k, v in prices.items() if v is not None}
+        
+        if len(valid_prices) < 2:
+            return opportunities
+        
+        # Find arbitrage opportunities
+        for exchange1, price1 in valid_prices.items():
+            for exchange2, price2 in valid_prices.items():
+                if exchange1 >= exchange2:
+                    continue
+                
+                if price1 > price2:
+                    profit_percent = ((price1 - price2) / price2) * 100
+                    if profit_percent >= min_profit:
+                        opportunities.append({
+                            'buy': exchange2,
+                            'sell': exchange1,
+                            'buy_price': price2,
+                            'sell_price': price1,
+                            'profit_percent': profit_percent,
+                            'symbol': 'BTC/USD'
+                        })
+                elif price2 > price1:
+                    profit_percent = ((price2 - price1) / price1) * 100
+                    if profit_percent >= min_profit:
+                        opportunities.append({
+                            'buy': exchange1,
+                            'sell': exchange2,
+                            'buy_price': price1,
+                            'sell_price': price2,
+                            'profit_percent': profit_percent,
+                            'symbol': 'BTC/USD'
+                        })
+        
+        return opportunities
+
+# ─────────────────────────────────────────────────────────────
+# EV CALCULATION FUNCTIONS
+# ─────────────────────────────────────────────────────────────
 def calculate_true_probability(odds, market_avg):
     implied = 1 / odds
     adjustment = 1 - (market_avg - 1) * 0.1
@@ -412,6 +504,19 @@ def init_db():
         timestamp TEXT
     )
     ''')
+    c.execute('''
+    CREATE TABLE IF NOT EXISTS crypto_opportunities (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT NOT NULL,
+        buy_exchange TEXT,
+        sell_exchange TEXT,
+        symbol TEXT,
+        buy_price REAL,
+        sell_price REAL,
+        profit_percent REAL,
+        executed INTEGER DEFAULT 0
+    )
+    ''')
     conn.commit()
     conn.close()
 
@@ -500,6 +605,27 @@ def update_bet_result(bet_id, result, return_amount, profit_loss):
     SET result = ?, return = ?, profit_loss = ?
     WHERE id = ?
     ''', (result, return_amount, profit_loss, bet_id))
+    conn.commit()
+    conn.close()
+
+def log_crypto_opportunity(opp):
+    conn = sqlite3.connect('betting_history.db')
+    c = conn.cursor()
+    c.execute('''
+    INSERT INTO crypto_opportunities (
+        timestamp, buy_exchange, sell_exchange, symbol,
+        buy_price, sell_price, profit_percent, executed
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        datetime.now().isoformat(),
+        opp['buy'],
+        opp['sell'],
+        opp['symbol'],
+        opp['buy_price'],
+        opp['sell_price'],
+        opp['profit_percent'],
+        0
+    ))
     conn.commit()
     conn.close()
 
@@ -631,7 +757,7 @@ if not st.session_state.authenticated:
 # ─── MAIN DASHBOARD ──────────────────────────────────────────
 init_db()
 
-st.title("📊 Betting System — Arbitrage + EV Scanner")
+st.title("📊 Hybrid Betting System — Active + Passive")
 st.markdown(f"**Welcome, {st.session_state.user_name}** | Role: {st.session_state.user_role.upper()}")
 
 with st.sidebar:
@@ -640,7 +766,9 @@ with st.sidebar:
         do_logout()
 
 # Tabs
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📸 Upload", "📝 Manual", "📊 Results", "📄 Slip", "📋 History", "🔍 Scanner"])
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    "📸 Upload", "📝 Manual", "📊 Results", "📄 Slip", "📋 History", "🔍 Scanner", "🪙 Crypto"
+])
 
 with tab1:
     st.markdown("### 📸 Upload Odds Board Photo")
@@ -934,22 +1062,23 @@ with tab5:
             st.info("No pending bets to update.")
 
 with tab6:
-    st.markdown("### 🔍 Live Arbitrage Scanner")
-    st.markdown("Scan multiple sportsbooks for arbitrage opportunities in real-time.")
+    st.markdown("### 🔍 Live Arbitrage + EV Scanner")
+    st.markdown("Scan multiple sportsbooks for arbitrage or positive EV opportunities.")
     
     # Scanner settings
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        scan_sport = st.selectbox("Sport", ["soccer_epl", "soccer_uefa_champs_league", "icehockey_nhl", "basketball_nba", "all"])
+        scan_mode = st.selectbox("Scan Mode", ["Arbitrage", "EV (Value Bets)", "Both"])
     with col2:
-        target_stake = st.number_input("Target Total Stake ($)", min_value=10, value=100, step=10)
+        scan_sport = st.selectbox("Sport", ["soccer_epl", "soccer_uefa_champs_league", "soccer_spain_la_liga", "soccer_germany_bundesliga", "soccer_italy_serie_a", "tennis_atp", "tennis_wta", "basketball_nba", "icehockey_nhl", "all"])
     with col3:
-        min_profit = st.slider("Min. Profit %", 0.1, 5.0, 0.5, 0.1)
+        target_stake = st.number_input("Target Stake ($)", min_value=10, value=100, step=10)
+    with col4:
+        min_ev = st.slider("Min. EV %", 1, 20, 5, 1)
     
     # Debug mode toggle
     show_debug = st.checkbox("🔍 Show Debug Info", value=True)
     
-    # API Key Test Button
     if st.button("🧪 Test API Key", use_container_width=True):
         with st.spinner("Testing API key..."):
             test_scanner = SportsBookScanner(ODDS_API_KEY)
@@ -960,7 +1089,7 @@ with tab6:
             else:
                 st.error("❌ API key test failed. Please check your API key.")
     
-    if st.button("🔍 Scan for Arbitrage", use_container_width=True, type="primary"):
+    if st.button("🔍 Scan for Opportunities", use_container_width=True, type="primary"):
         with st.spinner("Scanning multiple sportsbooks..."):
             scanner = SportsBookScanner(ODDS_API_KEY)
             
@@ -969,22 +1098,26 @@ with tab6:
                 if not sports:
                     st.error("No sports found. Please check your API key.")
                     st.stop()
+                relevant_sports = ["soccer_", "tennis_", "basketball_", "icehockey_", "baseball_"]
+                sports = [s for s in sports if any(r in s for r in relevant_sports)]
+                sports = sports[:10]
             else:
                 sports = [scan_sport]
             
             debug_info = []
-            all_arbs = []
+            all_opportunities = []
             total_events = 0
             total_books = 0
             
-            for sport in sports[:5]:
+            for sport in sports[:10]:
                 events = scanner.fetch_live_odds(sport)
                 total_events += len(events)
                 sport_debug = {
                     'sport': sport,
                     'events_found': len(events),
                     'books_found': 0,
-                    'arbitrage_found': 0
+                    'arbitrage_found': 0,
+                    'ev_bets_found': 0
                 }
                 
                 for event in events:
@@ -1007,37 +1140,93 @@ with tab6:
                                     home = odds.get(event.get('home_team', ''), 0)
                                     away = odds.get(event.get('away_team', ''), 0)
                                     draw = odds.get('Draw', 0)
+                                    home_team = event.get('home_team', '')
+                                    away_team = event.get('away_team', '')
                                     
-                                    arb = ArbitrageEngine.calculate_arbitrage(home, away, draw)
-                                    if arb and arb.get('roi_percentage', 0) >= min_profit:
-                                        all_arbs.append({
-                                            'sport': sport,
-                                            'home_team': event.get('home_team', ''),
-                                            'away_team': event.get('away_team', ''),
-                                            'arb': arb,
-                                            'book': book.get('key', ''),
-                                            'stakes': ArbitrageEngine.allocate_stakes(
-                                                target_stake,
-                                                arb.get('weights', {})
-                                            ),
-                                            'rounded_stakes': ArbitrageEngine.round_stakes(
-                                                ArbitrageEngine.allocate_stakes(
+                                    if scan_mode in ["Arbitrage", "Both"]:
+                                        arb = ArbitrageEngine.calculate_arbitrage(home, away, draw)
+                                        if arb and arb.get('roi_percentage', 0) >= 0.1:
+                                            all_opportunities.append({
+                                                'type': 'Arbitrage',
+                                                'sport': sport,
+                                                'home_team': home_team,
+                                                'away_team': away_team,
+                                                'arb': arb,
+                                                'book': book.get('key', ''),
+                                                'stakes': ArbitrageEngine.allocate_stakes(
                                                     target_stake,
                                                     arb.get('weights', {})
+                                                ),
+                                                'rounded_stakes': ArbitrageEngine.round_stakes(
+                                                    ArbitrageEngine.allocate_stakes(
+                                                        target_stake,
+                                                        arb.get('weights', {})
+                                                    )
                                                 )
-                                            )
-                                        })
-                                        sport_debug['arbitrage_found'] += 1
+                                            })
+                                            sport_debug['arbitrage_found'] += 1
+                                    
+                                    if scan_mode in ["EV (Value Bets)", "Both"]:
+                                        outcomes = [
+                                            ('home', home, home_team),
+                                            ('draw', draw, 'Draw'),
+                                            ('away', away, away_team)
+                                        ]
+                                        
+                                        for outcome_name, odds_val, label in outcomes:
+                                            if odds_val > 0:
+                                                implied_prob = 1 / odds_val
+                                                true_prob = min(implied_prob * 1.08, 0.95)
+                                                ev = (true_prob * odds_val) - 1
+                                                ev_percent = ev * 100
+                                                
+                                                if ev_percent >= min_ev:
+                                                    b = odds_val - 1
+                                                    p = true_prob
+                                                    q = 1 - p
+                                                    if b > 0:
+                                                        kelly = (p * b - q) / b
+                                                        if kelly > 0:
+                                                            stake = kelly * bankroll * 0.25
+                                                        else:
+                                                            stake = 10
+                                                    else:
+                                                        stake = 10
+                                                    
+                                                    stake = max(stake, 5)
+                                                    
+                                                    all_opportunities.append({
+                                                        'type': 'EV Bet',
+                                                        'sport': sport,
+                                                        'home_team': home_team,
+                                                        'away_team': away_team,
+                                                        'outcome': outcome_name,
+                                                        'label': label,
+                                                        'odds': odds_val,
+                                                        'ev_percent': ev_percent,
+                                                        'implied_prob': implied_prob * 100,
+                                                        'true_prob': true_prob * 100,
+                                                        'stake': round(stake, 2),
+                                                        'potential_return': round(stake * odds_val, 2),
+                                                        'book': book.get('key', '')
+                                                    })
+                                                    sport_debug['ev_bets_found'] += 1
                 
                 debug_info.append(sport_debug)
             
-            st.session_state.scanner_results = all_arbs
+            st.session_state.scanner_results = all_opportunities
             st.session_state.scanner_debug = {
                 'debug_info': debug_info,
                 'total_events': total_events,
                 'total_books': total_books,
-                'total_arbs': len(all_arbs)
+                'total_opportunities': len(all_opportunities)
             }
+            
+            # Send Telegram alert if opportunities found
+            if all_opportunities:
+                ev_count = len([o for o in all_opportunities if o.get('type') == 'EV Bet'])
+                arb_count = len([o for o in all_opportunities if o.get('type') == 'Arbitrage'])
+                send_telegram_alert(f"🔔 New opportunities found!\nEV Bets: {ev_count}\nArbitrage: {arb_count}")
     
     # Display debug info
     if show_debug and 'scanner_debug' in st.session_state:
@@ -1045,64 +1234,174 @@ with tab6:
         st.markdown("---")
         st.markdown("### 📊 Scan Summary")
         
-        col1, col2, col3, col4 = st.columns(4)
+        arb_count = len([o for o in st.session_state.scanner_results if o.get('type') == 'Arbitrage'])
+        ev_count = len([o for o in st.session_state.scanner_results if o.get('type') == 'EV Bet'])
+        
+        col1, col2, col3, col4, col5 = st.columns(5)
         col1.metric("Sports Scanned", len(debug['debug_info']))
         col2.metric("Events Found", debug['total_events'])
         col3.metric("Books Checked", debug['total_books'])
-        col4.metric("Arbitrage Found", debug['total_arbs'])
+        col4.metric("Arbitrage", arb_count)
+        col5.metric("EV Bets", ev_count)
         
         if debug['total_events'] == 0:
-            st.warning("⚠️ No events found. This could mean:")
-            st.markdown("""
-            - Your API key is invalid or expired
-            - The selected sport has no active matches
-            - You've reached your API rate limit (500 requests/day on free tier)
-            """)
+            st.warning("⚠️ No events found. Check your API key or try a different sport.")
         
-        # Show detailed debug per sport
         with st.expander("📋 Detailed Scan Results"):
             for sport_debug in debug['debug_info']:
                 st.markdown(f"**{sport_debug['sport']}**")
                 st.markdown(f"- Events: {sport_debug['events_found']}")
                 st.markdown(f"- Books: {sport_debug['books_found']}")
                 st.markdown(f"- Arbs: {sport_debug['arbitrage_found']}")
+                st.markdown(f"- EV Bets: {sport_debug['ev_bets_found']}")
                 st.markdown("---")
     
     # Display scanner results
     if st.session_state.scanner_results:
-        st.subheader(f"🔎 Found {len(st.session_state.scanner_results)} Arbitrage Opportunities")
+        arb_results = [o for o in st.session_state.scanner_results if o.get('type') == 'Arbitrage']
+        ev_results = [o for o in st.session_state.scanner_results if o.get('type') == 'EV Bet']
         
-        for i, result in enumerate(st.session_state.scanner_results, 1):
-            arb = result['arb']
-            st.markdown(f"**{i}. {result['home_team']} vs {result['away_team']}**")
-            st.markdown(f"📊 **Profit:** {arb.get('roi_percentage', 0):.2f}%")
-            st.markdown(f"📚 **Book:** {result['book']}")
+        if ev_results:
+            st.subheader(f"🎯 EV Bets Found ({len(ev_results)})")
+            st.markdown("These are bets with **positive Expected Value** — profitable over time.")
             
-            col1, col2, col3 = st.columns(3)
+            ev_results = sorted(ev_results, key=lambda x: x.get('ev_percent', 0), reverse=True)
             
-            if 'home' in result['stakes']:
-                col1.metric("Home Bet", f"${result['stakes']['home']:.2f}", f"@ {arb['outcomes']['home']['odds']}")
+            for i, bet in enumerate(ev_results[:20], 1):
+                st.markdown(f"**{i}. {bet['home_team']} vs {bet['away_team']}**")
+                col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 1])
+                col1.write(f"**{bet['label']}** @ {bet['odds']}")
+                col2.write(f"EV: {bet['ev_percent']:.1f}%")
+                col3.write(f"True: {bet['true_prob']:.1f}%")
+                col4.write(f"Stake: ${bet['stake']:.2f}")
+                col5.write(f"Return: ${bet['potential_return']:.2f}")
+                
+                if bet['ev_percent'] >= 15:
+                    st.success("✅ Strong")
+                elif bet['ev_percent'] >= 10:
+                    st.info("🔵 Good")
+                else:
+                    st.warning("🟡 Consider")
+                
+                st.caption(f"Book: {bet.get('book', 'Unknown')}")
+                st.markdown("---")
+        
+        if arb_results:
+            st.subheader(f"🔄 Arbitrage Opportunities ({len(arb_results)})")
+            st.markdown("These are **guaranteed profit** opportunities — bet on all outcomes.")
             
-            if 'draw' in result['stakes'] and result['stakes']['draw'] > 0:
-                col2.metric("Draw Bet", f"${result['stakes']['draw']:.2f}", f"@ {arb['outcomes']['draw']['odds']}")
+            for i, result in enumerate(arb_results, 1):
+                arb = result['arb']
+                st.markdown(f"**{i}. {result['home_team']} vs {result['away_team']}**")
+                st.markdown(f"📊 **Profit:** {arb.get('roi_percentage', 0):.2f}%")
+                st.markdown(f"📚 **Book:** {result['book']}")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                if 'home' in result['stakes']:
+                    col1.metric("Home Bet", f"${result['stakes']['home']:.2f}", f"@ {arb['outcomes']['home']['odds']}")
+                
+                if 'draw' in result['stakes'] and result['stakes']['draw'] > 0:
+                    col2.metric("Draw Bet", f"${result['stakes']['draw']:.2f}", f"@ {arb['outcomes']['draw']['odds']}")
+                
+                if 'away' in result['stakes']:
+                    col3.metric("Away Bet", f"${result['stakes']['away']:.2f}", f"@ {arb['outcomes']['away']['odds']}")
+                
+                st.markdown("**Rounded Stakes:**")
+                st.json(result['rounded_stakes'])
+                st.markdown("---")
+        
+        if ev_results or arb_results:
+            total_ev_stake = sum(b.get('stake', 0) for b in ev_results)
+            total_ev_return = sum(b.get('potential_return', 0) for b in ev_results)
             
-            if 'away' in result['stakes']:
-                col3.metric("Away Bet", f"${result['stakes']['away']:.2f}", f"@ {arb['outcomes']['away']['odds']}")
-            
-            st.markdown("**Rounded Stakes (to avoid detection):**")
-            st.json(result['rounded_stakes'])
             st.markdown("---")
+            st.markdown("### 📊 Summary")
             
-            if st.button(f"✅ Add to Slip", key=f"add_arb_{i}"):
-                st.success("Added to paper slip!")
-    elif 'scanner_debug' in st.session_state and st.session_state.scanner_debug['total_arbs'] == 0:
-        st.info("No arbitrage opportunities found. Try:")
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Total EV Bets", len(ev_results))
+            col2.metric("Total Stake (EV)", f"${total_ev_stake:.2f}")
+            col3.metric("Expected Return", f"${total_ev_return:.2f}")
+            col4.metric("Expected Profit", f"${total_ev_return - total_ev_stake:.2f}")
+            
+    elif 'scanner_debug' in st.session_state:
+        st.info("No opportunities found. Try:")
         st.markdown("""
-        - Scanning a different sport
-        - Lowering the minimum profit threshold
-        - Scanning during peak hours (when odds are more volatile)
-        - Checking smaller markets (less efficient = more arbs)
+        - **Lowering the Min. EV %** (try 3-4% instead of 5%)
+        - **Scanning a different sport** (try soccer or tennis)
+        - **Using a different API region**
+        - **Scanning during peak hours** (when more matches are live)
         """)
+
+with tab7:
+    st.markdown("### 🪙 Crypto Arbitrage Scanner (Passive)")
+    st.markdown("Scan multiple crypto exchanges for price discrepancies.")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        crypto_symbol = st.selectbox("Crypto Pair", ["BTC/USD", "ETH/USD", "SOL/USD", "ADA/USD"])
+        min_crypto_profit = st.slider("Min. Crypto Arbitrage %", 0.1, 2.0, 0.5, 0.1)
+    with col2:
+        st.info("""
+        **How Crypto Arbitrage Works:**
+        - Buy on Exchange A at lower price
+        - Sell on Exchange B at higher price
+        - Profit = price difference - fees
+        
+        **Current Exchanges Scanned:**
+        - Binance
+        - Coinbase
+        - Kraken
+        """)
+    
+    if st.button("🔍 Scan Crypto Arbitrage", use_container_width=True, type="primary"):
+        with st.spinner("Scanning crypto exchanges..."):
+            scanner = CryptoArbitrageScanner()
+            
+            if crypto_symbol == "BTC/USD":
+                opportunities = scanner.scan_crypto_arbitrage(min_crypto_profit)
+            else:
+                st.warning(f"Full support for {crypto_symbol} coming soon. BTC/USD is fully implemented.")
+                opportunities = scanner.scan_crypto_arbitrage(min_crypto_profit)
+            
+            if opportunities:
+                st.subheader(f"💰 Found {len(opportunities)} Crypto Arbitrage Opportunities")
+                
+                for opp in opportunities:
+                    st.markdown(f"**{opp['symbol']}**")
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("Buy", opp['buy'].upper(), f"${opp['buy_price']:.2f}")
+                    col2.metric("Sell", opp['sell'].upper(), f"${opp['sell_price']:.2f}")
+                    col3.metric("Profit", f"{opp['profit_percent']:.2f}%")
+                    col4.metric("Action", "BUY → SELL")
+                    
+                    # Log the opportunity
+                    log_crypto_opportunity(opp)
+                    
+                    # Send Telegram alert
+                    send_telegram_alert(f"🪙 Crypto Arbitrage!\nBuy: {opp['buy']} @ ${opp['buy_price']:.2f}\nSell: {opp['sell']} @ ${opp['sell_price']:.2f}\nProfit: {opp['profit_percent']:.2f}%")
+                    
+                    st.markdown("---")
+                
+                st.info("⚠️ Note: Fees and transfer times may impact profitability. Always verify before executing.")
+            else:
+                st.info("No crypto arbitrage opportunities found. Try again later.")
+    
+    # Show recent crypto opportunities
+    st.markdown("---")
+    st.markdown("### 📋 Recent Crypto Opportunities")
+    
+    conn = sqlite3.connect('betting_history.db')
+    try:
+        df = pd.read_sql_query('SELECT * FROM crypto_opportunities ORDER BY timestamp DESC LIMIT 20', conn)
+        if not df.empty:
+            st.dataframe(df[['timestamp', 'buy_exchange', 'sell_exchange', 'symbol', 'profit_percent', 'executed']], use_container_width=True)
+        else:
+            st.info("No crypto opportunities logged yet.")
+    except:
+        st.info("No crypto opportunities logged yet.")
+    finally:
+        conn.close()
 
 # ─────────────────────────────────────────────────────────────
 # FOOTER
