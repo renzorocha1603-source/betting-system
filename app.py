@@ -80,7 +80,8 @@ def init_db():
             name TEXT,
             created_at TEXT,
             subscription_status TEXT DEFAULT 'active',
-            is_admin INTEGER DEFAULT 0
+            is_admin INTEGER DEFAULT 0,
+            starting_bankroll REAL DEFAULT 1000
         )
         ''')
     else:
@@ -88,6 +89,8 @@ def init_db():
         columns = [col[1] for col in c.fetchall()]
         if 'is_admin' not in columns:
             c.execute('ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0')
+        if 'starting_bankroll' not in columns:
+            c.execute('ALTER TABLE users ADD COLUMN starting_bankroll REAL DEFAULT 1000')
 
     c.execute('''
     CREATE TABLE IF NOT EXISTS bets (
@@ -145,6 +148,21 @@ def authenticate_user(email, password):
     result = c.fetchone()
     conn.close()
     return result
+
+def get_user_bankroll(user_id):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute('SELECT starting_bankroll FROM users WHERE id = ?', (user_id,))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row and row[0] is not None else 1000.0
+
+def set_user_bankroll(user_id, amount):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute('UPDATE users SET starting_bankroll = ? WHERE id = ?', (amount, user_id))
+    conn.commit()
+    conn.close()
 
 def get_user_bets(user_id):
     if user_id is None:
@@ -1159,6 +1177,7 @@ def login_page():
                 st.session_state.user_name = user[3]
                 st.session_state.user_id = user[0]
                 st.session_state.is_admin = user[6] if len(user) > 6 else 0
+                st.session_state.starting_bankroll = user[7] if len(user) > 7 and user[7] is not None else 1000.0
                 st.rerun()
             else:
                 st.error(t['login_error'])
@@ -1509,6 +1528,23 @@ def dashboard():
 
     bets = get_user_bets(st.session_state.user_id)
 
+    if 'starting_bankroll' not in st.session_state:
+        st.session_state.starting_bankroll = get_user_bankroll(st.session_state.user_id)
+    bankroll_base = st.session_state.starting_bankroll
+
+    col_kpi_hdr, col_bankroll_edit = st.columns([5, 1])
+    with col_bankroll_edit:
+        with st.popover("💰 Set Bankroll"):
+            st.markdown("**Starting Bankroll**")
+            new_bankroll = st.number_input(
+                "Amount ($)", min_value=0.0, value=float(bankroll_base), step=50.0, key="bankroll_input"
+            )
+            if st.button("Save", key="save_bankroll_btn", use_container_width=True, type="primary"):
+                set_user_bankroll(st.session_state.user_id, new_bankroll)
+                st.session_state.starting_bankroll = new_bankroll
+                st.success("✅ Bankroll updated")
+                st.rerun()
+
     if bets:
         summary = get_bet_summary(bets)
         total_bets = summary['total']
@@ -1531,7 +1567,7 @@ def dashboard():
             </div>
             <div class="kpi-card">
                 <div class="label">Bankroll</div>
-                <div class="value orange">${1000 + profit:.2f}</div>
+                <div class="value orange">${bankroll_base + profit:.2f}</div>
                 <div class="change {'positive' if profit > 0 else 'negative'}">{'+' if profit > 0 else ''}{profit:.2f}</div>
             </div>
             <div class="kpi-card">
@@ -1542,11 +1578,11 @@ def dashboard():
         </div>
         """, unsafe_allow_html=True)
     else:
-        st.markdown("""
+        st.markdown(f"""
         <div class="kpi-grid">
             <div class="kpi-card"><div class="label">Active Bets</div><div class="value cyan">0</div><div class="change">No active bets</div></div>
             <div class="kpi-card"><div class="label">Win Rate</div><div class="value lime">0%</div><div class="change">No data yet</div></div>
-            <div class="kpi-card"><div class="label">Bankroll</div><div class="value orange">$1,000</div><div class="change">Start betting</div></div>
+            <div class="kpi-card"><div class="label">Bankroll</div><div class="value orange">${bankroll_base:,.2f}</div><div class="change">Start betting</div></div>
             <div class="kpi-card"><div class="label">Avg EV</div><div class="value purple">0%</div><div class="change">Scan to find value</div></div>
         </div>
         """, unsafe_allow_html=True)
