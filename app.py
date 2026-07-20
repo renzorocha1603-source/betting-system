@@ -1140,6 +1140,7 @@ with tab6:
                                     home_team = event.get('home_team', '')
                                     away_team = event.get('away_team', '')
                                     
+                                    # Check for arbitrage (only if mode includes it)
                                     if scan_mode in ["Arbitrage", "Both"]:
                                         arb = ArbitrageEngine.calculate_arbitrage(home, away, draw)
                                         if arb and arb.get('roi_percentage', 0) >= 0.1:
@@ -1163,6 +1164,7 @@ with tab6:
                                             })
                                             sport_debug['arbitrage_found'] += 1
                                     
+                                    # Check for EV bets (only if mode includes it)
                                     if scan_mode in ["EV (Value Bets)", "Both"]:
                                         outcomes = [
                                             ('home', home, home_team),
@@ -1372,10 +1374,8 @@ with tab7:
                     col3.metric("Profit", f"{opp['profit_percent']:.2f}%")
                     col4.metric("Action", "BUY → SELL")
                     
-                    # Log the opportunity
                     log_crypto_opportunity(opp)
                     
-                    # Send Telegram alert
                     send_telegram_alert(f"🪙 Crypto Arbitrage!\nBuy: {opp['buy']} @ ${opp['buy_price']:.2f}\nSell: {opp['sell']} @ ${opp['sell_price']:.2f}\nProfit: {opp['profit_percent']:.2f}%")
                     
                     st.markdown("---")
@@ -1384,7 +1384,6 @@ with tab7:
             else:
                 st.info("No crypto arbitrage opportunities found. Try again later.")
     
-    # Show recent crypto opportunities
     st.markdown("---")
     st.markdown("### 📋 Recent Crypto Opportunities")
     
