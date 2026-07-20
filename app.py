@@ -1169,6 +1169,93 @@ def login_page():
         st.rerun()
 
 # ─────────────────────────────────────────────────────────────
+# SCANNER — result generators (simulated; swap with real odds
+# API calls using ODDS_API_KEY when ready)
+# ─────────────────────────────────────────────────────────────
+SCAN_MATCHES = [
+    ('Arsenal', 'Coventry'),
+    ('Everton', 'Crystal Palace'),
+    ('Ipswich', 'Sunderland'),
+    ('Hull City', 'Man Utd'),
+    ('Brentford', 'Spurs'),
+    ('Leeds', 'Southampton'),
+    ('Norwich', 'Watford'),
+    ('Chelsea', 'West Ham')
+]
+SCAN_BOOKS = ['Betfair', 'Pinnacle', 'Bet365', 'NordicBet', 'Coolbet', 'Unibet']
+
+def generate_ev_bets(count, target_stake, min_ev):
+    """Directional value bets: one side, one bookmaker, positive expected value.
+    Stake is sized as a modest slice of the bankroll the user entered, not the
+    whole amount, and odds/EV are independent of each other on purpose —
+    a big potential payout does NOT mean a big EV."""
+    ev_options = [v for v in [3.2, 4.1, 5.8, 6.7, 8.2, 9.5, 10.1, 12.3] if v >= min_ev] or [min_ev]
+    odds_options = [2.14, 3.44, 6.88, 8.20, 2.99, 3.15, 5.50, 4.80]
+    outcomes = ['Draw', 'Home Win', 'Away Win']
+
+    bets = []
+    for _ in range(count):
+        match = random.choice(SCAN_MATCHES)
+        odds = random.choice(odds_options)
+        ev = random.choice(ev_options)
+        outcome = random.choice(outcomes)
+        book = random.choice(SCAN_BOOKS)
+
+        stake = round(max(5.0, target_stake * random.uniform(0.05, 0.15)), 2)
+        potential_return = round(stake * odds, 2)
+
+        bets.append({
+            'type': 'ev',
+            'match': f"{match[0]} vs {match[1]}",
+            'outcome': outcome,
+            'odds': odds,
+            'ev_percent': ev,
+            'true_prob': round((1 / odds) * 100 * (1 + ev / 100), 1),
+            'stake': stake,
+            'potential_return': potential_return,
+            'book': book
+        })
+    return bets
+
+def generate_arbitrage_opportunities(count, target_stake):
+    """True arbitrage: odds on every outcome from different bookmakers whose
+    implied probabilities sum to less than 100%, so splitting the stake across
+    all legs guarantees the SAME small profit no matter which outcome wins."""
+    opportunities = []
+    for _ in range(count):
+        match = random.choice(SCAN_MATCHES)
+        book1, book2 = random.sample(SCAN_BOOKS, 2)
+
+        margin = random.uniform(0.01, 0.05)          # 1-5% guaranteed edge — realistic for real arbitrage
+        total_implied = 1 - margin
+        split = random.uniform(0.35, 0.65)
+        p1 = total_implied * split
+        p2 = total_implied * (1 - split)
+
+        odds1 = round(1 / p1, 2)
+        odds2 = round(1 / p2, 2)
+        stake1 = round(target_stake * p1 / total_implied, 2)
+        stake2 = round(target_stake * p2 / total_implied, 2)
+        actual_total_stake = round(stake1 + stake2, 2)
+        guaranteed_payout = round(actual_total_stake / total_implied, 2)
+        guaranteed_profit = round(guaranteed_payout - actual_total_stake, 2)
+        profit_percent = round((guaranteed_profit / actual_total_stake) * 100, 2)
+
+        opportunities.append({
+            'type': 'arbitrage',
+            'match': f"{match[0]} vs {match[1]}",
+            'legs': [
+                {'outcome': 'Home Win', 'book': book1, 'odds': odds1, 'stake': stake1},
+                {'outcome': 'Away Win', 'book': book2, 'odds': odds2, 'stake': stake2},
+            ],
+            'total_stake': actual_total_stake,
+            'guaranteed_payout': guaranteed_payout,
+            'guaranteed_profit': guaranteed_profit,
+            'profit_percent': profit_percent
+        })
+    return opportunities
+
+# ─────────────────────────────────────────────────────────────
 # DASHBOARD (PRIVATE)
 # ─────────────────────────────────────────────────────────────
 def dashboard():
@@ -1285,104 +1372,130 @@ def dashboard():
 
         if st.button(t['scan_btn'], use_container_width=True, type="primary"):
             with st.spinner("Scanning 70+ bookmakers..."):
-                sample_bets = []
+                results = []
 
-                ev_options = [3.2, 4.1, 5.8, 6.7, 8.2, 9.5, 10.1, 12.3]
-                odds_options = [2.14, 3.44, 6.88, 8.20, 2.99, 3.15, 5.50, 4.80]
-                outcomes = ['Draw', 'Home Win', 'Away Win']
-                books = ['Betfair', 'Pinnacle', 'Bet365', 'NordicBet', 'Coolbet', 'Unibet']
-                matches = [
-                    ('Arsenal', 'Coventry'),
-                    ('Everton', 'Crystal Palace'),
-                    ('Ipswich', 'Sunderland'),
-                    ('Hull City', 'Man Utd'),
-                    ('Brentford', 'Spurs'),
-                    ('Leeds', 'Southampton'),
-                    ('Norwich', 'Watford'),
-                    ('Chelsea', 'West Ham')
-                ]
+                if scan_mode == t['ev_mode']:
+                    results = generate_ev_bets(5, target_stake, min_ev)
+                elif scan_mode == t['arbitrage_mode']:
+                    results = generate_arbitrage_opportunities(4, target_stake)
+                else:  # Both
+                    results = generate_ev_bets(3, target_stake, min_ev) + generate_arbitrage_opportunities(2, target_stake)
 
-                for i in range(5):
-                    match = random.choice(matches)
-                    odds = random.choice(odds_options)
-                    ev = random.choice(ev_options)
-                    outcome = random.choice(outcomes)
-                    book = random.choice(books)
+                for item in results:
+                    if item['type'] == 'ev':
+                        add_bet(st.session_state.user_id, {
+                            'sport': 'Soccer',
+                            'home_team': item['match'].split(' vs ')[0],
+                            'away_team': item['match'].split(' vs ')[1],
+                            'outcome': item['outcome'],
+                            'odds': item['odds'],
+                            'stake': item['stake'],
+                            'ev_percent': item['ev_percent'],
+                            'result': 'Pending',
+                            'return': 0,
+                            'profit_loss': 0
+                        })
+                    else:
+                        for leg in item['legs']:
+                            add_bet(st.session_state.user_id, {
+                                'sport': 'Soccer',
+                                'home_team': item['match'].split(' vs ')[0],
+                                'away_team': item['match'].split(' vs ')[1],
+                                'outcome': f"{leg['outcome']} ({leg['book']}) — arb leg",
+                                'odds': leg['odds'],
+                                'stake': leg['stake'],
+                                'ev_percent': item['profit_percent'],
+                                'result': 'Pending',
+                                'return': 0,
+                                'profit_loss': 0
+                            })
 
-                    stake = round(10 + (ev / 2), 2)
-                    potential_return = round(stake * odds, 2)
-
-                    sample_bets.append({
-                        'match': f"{match[0]} vs {match[1]}",
-                        'outcome': outcome,
-                        'odds': odds,
-                        'ev_percent': ev,
-                        'true_prob': round((1 / odds) * 100 * (1 + ev / 100), 1),
-                        'stake': stake,
-                        'potential_return': potential_return,
-                        'book': book
-                    })
-
-                for bet in sample_bets:
-                    add_bet(st.session_state.user_id, {
-                        'sport': 'Soccer',
-                        'home_team': bet['match'].split(' vs ')[0],
-                        'away_team': bet['match'].split(' vs ')[1],
-                        'outcome': bet['outcome'],
-                        'odds': bet['odds'],
-                        'stake': bet['stake'],
-                        'ev_percent': bet['ev_percent'],
-                        'result': 'Pending',
-                        'return': 0,
-                        'profit_loss': 0
-                    })
-
-                st.session_state.scan_results = sample_bets
-                st.success(f"✅ Found {len(sample_bets)} value bets!")
+                st.session_state.scan_results = results
+                st.session_state.scan_mode_used = scan_mode
+                st.success(f"✅ Found {len(results)} opportunities!")
                 st.rerun()
 
         if 'scan_results' in st.session_state and st.session_state.scan_results:
-            st.markdown(f"### {t['best_ev_bets']}")
+            col_hdr, col_help = st.columns([5, 1])
+            with col_hdr:
+                st.markdown(f"### {t['best_ev_bets']}")
+            with col_help:
+                with st.popover("❓ Return"):
+                    st.markdown("""
+**Why does Return look so big?**
+
+For a **value bet (EV)**, *Return* is the total payout you'd get **only if that specific bet wins** — it's `stake × odds`, not your expected profit. Odds of 8.20 on a $15 stake pay $123 *if it hits*, but that outcome is unlikely, which is exactly why the odds are that high. It roughly cancels out over many bets.
+
+The number that actually matters is the **EV%** badge — your true statistical edge after accounting for how often the bet is expected to win.
+
+For a **true arbitrage** opportunity, there's no "if it wins" — you stake across every possible outcome, so exactly one leg always pays out and the small **Guaranteed Profit** is locked in regardless of the result. That number is deliberately small (often 1–5%) because it's real, not speculative.
+                    """)
 
             total_stake = 0
-            total_return = 0
+            total_payout = 0
 
-            for i, bet in enumerate(st.session_state.scan_results[:5], 1):
-                profit = bet['potential_return'] - bet['stake']
-                st.markdown(f"""
-                <div class="arb-card">
-                    <div class="arb-header">
-                        <div class="arb-match">
-                            <div class="teams">#{i} {bet['match'].replace(' vs ', ' <span class="vs">vs</span> ')}</div>
-                            <div class="meta">{bet['book']} · EV: {bet['ev_percent']:.1f}% · Win Prob: {bet['true_prob']:.1f}%</div>
+            for i, item in enumerate(st.session_state.scan_results, 1):
+                if item['type'] == 'ev':
+                    profit = item['potential_return'] - item['stake']
+                    st.markdown(f"""
+                    <div class="arb-card">
+                        <div class="arb-header">
+                            <div class="arb-match">
+                                <div class="teams">#{i} {item['match'].replace(' vs ', ' <span class="vs">vs</span> ')}</div>
+                                <div class="meta">{item['book']} · EV: {item['ev_percent']:.1f}% · Win Prob: {item['true_prob']:.1f}%</div>
+                            </div>
+                            <div class="arb-badge">⚡ +{item['ev_percent']:.1f}% EV</div>
                         </div>
-                        <div class="arb-badge">⚡ +{bet['ev_percent']:.1f}% EV</div>
-                    </div>
-                    <div class="arb-body">
-                        <div class="odds-grid">
-                            <div class="odd-cell"><span class="odd-label">Bet</span><span class="odd-value highlight">{bet['outcome']}</span></div>
-                            <div class="odd-cell"><span class="odd-label">Odds</span><span class="odd-value">{bet['odds']}</span></div>
-                            <div class="odd-cell"><span class="odd-label">Stake</span><span class="odd-value">${bet['stake']:.2f}</span></div>
-                            <div class="odd-cell"><span class="odd-label">Return</span><span class="odd-value" style="color:var(--lime);">${bet['potential_return']:.2f}</span></div>
-                            <div class="odd-cell"><span class="odd-label">Profit</span><span class="odd-value" style="color:var(--cyan);">+${profit:.2f}</span></div>
+                        <div class="arb-body">
+                            <div class="odds-grid">
+                                <div class="odd-cell"><span class="odd-label">Bet</span><span class="odd-value highlight">{item['outcome']}</span></div>
+                                <div class="odd-cell"><span class="odd-label">Odds</span><span class="odd-value">{item['odds']}</span></div>
+                                <div class="odd-cell"><span class="odd-label">Stake</span><span class="odd-value">${item['stake']:.2f}</span></div>
+                                <div class="odd-cell"><span class="odd-label">Return if wins</span><span class="odd-value" style="color:var(--lime);">${item['potential_return']:.2f}</span></div>
+                                <div class="odd-cell"><span class="odd-label">Profit if wins</span><span class="odd-value" style="color:var(--cyan);">+${profit:.2f}</span></div>
+                            </div>
                         </div>
                     </div>
-                </div>
-                """, unsafe_allow_html=True)
+                    """, unsafe_allow_html=True)
+                    total_stake += item['stake']
+                    total_payout += item['potential_return']
+                else:
+                    legs_html = "".join([
+                        f"""<div class="odd-cell"><span class="odd-label">{leg['outcome']} · {leg['book']}</span><span class="odd-value">{leg['odds']} · ${leg['stake']:.2f}</span></div>"""
+                        for leg in item['legs']
+                    ])
+                    st.markdown(f"""
+                    <div class="arb-card">
+                        <div class="arb-header">
+                            <div class="arb-match">
+                                <div class="teams">#{i} {item['match'].replace(' vs ', ' <span class="vs">vs</span> ')}</div>
+                                <div class="meta">Split across {len(item['legs'])} bookmakers · guaranteed regardless of result</div>
+                            </div>
+                            <div class="arb-badge">🔒 +{item['profit_percent']:.1f}% Guaranteed</div>
+                        </div>
+                        <div class="arb-body">
+                            <div class="odds-grid">
+                                {legs_html}
+                                <div class="odd-cell"><span class="odd-label">Total Stake</span><span class="odd-value">${item['total_stake']:.2f}</span></div>
+                                <div class="odd-cell"><span class="odd-label">Guaranteed Profit</span><span class="odd-value" style="color:var(--cyan);">+${item['guaranteed_profit']:.2f}</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    total_stake += item['total_stake']
+                    total_payout += item['guaranteed_payout']
 
-                total_stake += bet['stake']
-                total_return += bet['potential_return']
-
+            total_profit = total_payout - total_stake
             st.markdown(f"""
             <div style="background:var(--bg-card); border:1px solid var(--border-glass); border-radius:var(--card-radius); padding:1rem 1.5rem; margin-top:0.5rem;">
                 <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:1rem;">
-                    <div><span style="color:var(--text-muted); font-size:0.7rem;">Total Bets</span><br><span style="color:var(--text-primary); font-weight:700;">{len(st.session_state.scan_results)}</span></div>
+                    <div><span style="color:var(--text-muted); font-size:0.7rem;">Total Opportunities</span><br><span style="color:var(--text-primary); font-weight:700;">{len(st.session_state.scan_results)}</span></div>
                     <div><span style="color:var(--text-muted); font-size:0.7rem;">Total Stake</span><br><span style="color:var(--text-primary); font-weight:700;">${total_stake:.2f}</span></div>
-                    <div><span style="color:var(--text-muted); font-size:0.7rem;">Expected Return</span><br><span style="color:var(--lime); font-weight:700;">${total_return:.2f}</span></div>
-                    <div><span style="color:var(--text-muted); font-size:0.7rem;">Expected Profit</span><br><span style="color:var(--cyan); font-weight:700;">${total_return - total_stake:.2f}</span></div>
+                    <div><span style="color:var(--text-muted); font-size:0.7rem;">If All Hit / Payout</span><br><span style="color:var(--lime); font-weight:700;">${total_payout:.2f}</span></div>
+                    <div><span style="color:var(--text-muted); font-size:0.7rem;">Combined Upside</span><br><span style="color:var(--cyan); font-weight:700;">${total_profit:.2f}</span></div>
                 </div>
                 <div style="margin-top:0.5rem; font-size:0.7rem; color:var(--text-muted); border-top:1px solid var(--border-glass); padding-top:0.5rem;">
-                    💡 With {len(st.session_state.scan_results)} bets at {sum(b['ev_percent'] for b in st.session_state.scan_results)/len(st.session_state.scan_results):.1f}% average EV, expected profit is ${total_return - total_stake:.2f}
+                    💡 EV bets only pay out if they win individually — this total assumes every leg hits, which won't happen at once. Arbitrage legs are the only guaranteed number here.
                 </div>
             </div>
             """, unsafe_allow_html=True)
