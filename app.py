@@ -17,17 +17,17 @@ import random
 # PAGE CONFIG
 # ─────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Only Solutions · Budget System",
+    page_title="Only Solutions · Smart Betting System",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
 # ─────────────────────────────────────────────────────────────
-# API KEYS — pulled from environment / Streamlit secrets, never hardcoded
+# API KEYS — from Streamlit secrets
 # ─────────────────────────────────────────────────────────────
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", st.secrets.get("DEEPSEEK_API_KEY", ""))
-ODDS_API_KEY = os.environ.get("ODDS_API_KEY", st.secrets.get("ODDS_API_KEY", ""))
+DEEPSEEK_API_KEY = st.secrets.get("DEEPSEEK_API_KEY", "")
+ODDS_API_KEY = st.secrets.get("ODDS_API_KEY", "")
 
 # ─────────────────────────────────────────────────────────────
 # COMPANY INFO
@@ -37,7 +37,7 @@ DOMAIN = "onlysolutions.ca"
 YEAR = datetime.now().year
 
 # ─────────────────────────────────────────────────────────────
-# SESSION STATE DEFAULTS (must exist before anything reads them)
+# SESSION STATE DEFAULTS
 # ─────────────────────────────────────────────────────────────
 if 'theme' not in st.session_state:
     st.session_state.theme = "dark"
@@ -51,13 +51,17 @@ if 'user_id' not in st.session_state:
     st.session_state.user_id = None
 if 'is_admin' not in st.session_state:
     st.session_state.is_admin = 0
+if 'scan_results' not in st.session_state:
+    st.session_state.scan_results = []
+if 'bankroll' not in st.session_state:
+    st.session_state.bankroll = 1000.0
 
 def toggle_theme():
     st.session_state.theme = "light" if st.session_state.theme == "dark" else "dark"
     st.rerun()
 
 # ─────────────────────────────────────────────────────────────
-# DATABASE — Users
+# DATABASE
 # ─────────────────────────────────────────────────────────────
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'users.db')
 
@@ -88,6 +92,8 @@ def init_db():
         columns = [col[1] for col in c.fetchall()]
         if 'is_admin' not in columns:
             c.execute('ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0')
+        if 'bankroll' not in columns:
+            c.execute('ALTER TABLE users ADD COLUMN bankroll REAL DEFAULT 1000.0')
 
     c.execute('''
     CREATE TABLE IF NOT EXISTS bets (
@@ -104,18 +110,25 @@ def init_db():
         result TEXT,
         return REAL,
         profit_loss REAL,
+        bet_type TEXT DEFAULT 'ev',
         FOREIGN KEY(user_id) REFERENCES users(id)
     )
     ''')
+
+    # Add bet_type column if it doesn't exist
+    c.execute("PRAGMA table_info(bets)")
+    bet_columns = [col[1] for col in c.fetchall()]
+    if 'bet_type' not in bet_columns:
+        c.execute('ALTER TABLE bets ADD COLUMN bet_type TEXT DEFAULT "ev"')
 
     admin_email = "admin@onlys.com"
     admin_password = hashlib.sha256("admin123".encode()).hexdigest()
     c.execute('SELECT * FROM users WHERE email = ?', (admin_email,))
     if not c.fetchone():
         c.execute('''
-        INSERT INTO users (email, password, name, created_at, is_admin)
-        VALUES (?, ?, ?, ?, ?)
-        ''', (admin_email, admin_password, "Administrator", datetime.now().isoformat(), 1))
+        INSERT INTO users (email, password, name, created_at, is_admin, bankroll)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ''', (admin_email, admin_password, "Administrator", datetime.now().isoformat(), 1, 10000.0))
 
     conn.commit()
     conn.close()
@@ -128,9 +141,9 @@ def create_user(email, password, name):
     c = conn.cursor()
     try:
         c.execute('''
-        INSERT INTO users (email, password, name, created_at)
-        VALUES (?, ?, ?, ?)
-        ''', (email, hash_password(password), name, datetime.now().isoformat()))
+        INSERT INTO users (email, password, name, created_at, bankroll)
+        VALUES (?, ?, ?, ?, ?)
+        ''', (email, hash_password(password), name, datetime.now().isoformat(), 1000.0))
         conn.commit()
         return True
     except sqlite3.IntegrityError:
@@ -145,6 +158,21 @@ def authenticate_user(email, password):
     result = c.fetchone()
     conn.close()
     return result
+
+def get_user_bankroll(user_id):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute('SELECT bankroll FROM users WHERE id = ?', (user_id,))
+    result = c.fetchone()
+    conn.close()
+    return result[0] if result else 1000.0
+
+def update_user_bankroll(user_id, amount):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute('UPDATE users SET bankroll = ? WHERE id = ?', (amount, user_id))
+    conn.commit()
+    conn.close()
 
 def get_user_bets(user_id):
     if user_id is None:
@@ -162,8 +190,8 @@ def add_bet(user_id, bet_data):
     conn = get_conn()
     c = conn.cursor()
     c.execute('''
-    INSERT INTO bets (user_id, timestamp, sport, home_team, away_team, outcome, odds, stake, ev_percent, result, return, profit_loss)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO bets (user_id, timestamp, sport, home_team, away_team, outcome, odds, stake, ev_percent, result, return, profit_loss, bet_type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         user_id,
         bet_data.get('timestamp', datetime.now().isoformat()),
@@ -176,7 +204,8 @@ def add_bet(user_id, bet_data):
         bet_data.get('ev_percent', 0),
         bet_data.get('result', 'Pending'),
         bet_data.get('return', 0),
-        bet_data.get('profit_loss', 0)
+        bet_data.get('profit_loss', 0),
+        bet_data.get('bet_type', 'ev')
     ))
     conn.commit()
     conn.close()
@@ -195,14 +224,17 @@ def get_bet_summary(bets):
     total = len(bets)
     wins = len([b for b in bets if b[10] == 'Win'])
     losses = len([b for b in bets if b[10] == 'Loss'])
+    pending = len([b for b in bets if b[10] == 'Pending'])
     profit = sum([b[12] for b in bets if b[12] is not None])
 
     return {
         'total': total,
         'wins': wins,
         'losses': losses,
+        'pending': pending,
         'win_rate': wins / (wins + losses) * 100 if (wins + losses) > 0 else 0,
-        'net_profit': profit
+        'net_profit': profit,
+        'roi': (profit / sum([b[8] for b in bets if b[8] > 0]) * 100) if sum([b[8] for b in bets if b[8] > 0]) > 0 else 0
     }
 
 # ─────────────────────────────────────────────────────────────
@@ -210,8 +242,9 @@ def get_bet_summary(bets):
 # ─────────────────────────────────────────────────────────────
 LANGUAGES = {
     "en": {
-        "title": "📊 Budget System",
-        "subtitle": "Smart betting with Expected Value & Arbitrage",
+        "app_name": "Smart Betting System",
+        "title": "📊 Smart Betting System",
+        "subtitle": "Professional betting tools with Expected Value & Arbitrage",
         "live": "LIVE",
         "active_arbs": "Active Bets",
         "avg_roi": "Avg ROI",
@@ -245,9 +278,9 @@ LANGUAGES = {
         "arbitrage_mode": "Arbitrage",
         "both_mode": "Both",
         "min_ev": "Min EV %",
-        "stake_label": "Stake ($)",
+        "stake_label": "Total Bankroll ($)",
         "scan_btn": "🔍 Scan Now",
-        "best_ev_bets": "🎯 Best Value Bets",
+        "best_ev_bets": "🎯 Best Opportunities",
         "manual_title": "📝 Manual Odds Input",
         "sport": "Sport",
         "home_team": "Home Team",
@@ -284,16 +317,39 @@ LANGUAGES = {
         "theme_dark": "🌙 Dark",
         "theme_light": "☀️ Light",
         "ev_explained": "💡 What does EV mean?",
-        "ev_explanation": "Expected Value (EV) is the average profit you make per bet over many bets. A 4% EV means you expect to earn $4 for every $100 you bet. Professional bettors aim for 3-8% EV."
+        "ev_explanation": "Expected Value (EV) is the average profit you make per bet over many bets. A 4% EV means you expect to earn $4 for every $100 you bet. Professional bettors aim for 3-8% EV.",
+        "logout": "🚪 Logout",
+        "bankroll_management": "💰 Bankroll Management",
+        "update_bankroll": "Update Bankroll",
+        "current_bankroll": "Current Bankroll",
+        "roi": "ROI",
+        "pending": "Pending",
+        "features_title": "Professional Betting Tools",
+        "feature_1_title": "EV Scanner",
+        "feature_1_desc": "Find positive expected value bets automatically across 70+ bookmakers",
+        "feature_2_title": "Arbitrage Scanner",
+        "feature_2_desc": "Discover guaranteed profit opportunities with real-time odds comparison",
+        "feature_3_title": "Paper Slip Generator",
+        "feature_3_desc": "Generate professional betting slips ready for any bookmaker",
+        "pricing_title": "Start Your Free Trial",
+        "pricing_price": "$1.99",
+        "pricing_period": "per month after trial",
+        "pricing_feature_1": "Unlimited EV Scans",
+        "pricing_feature_2": "Arbitrage Detection",
+        "pricing_feature_3": "Paper Slip Generator",
+        "pricing_feature_4": "AI-Powered Analysis",
+        "pricing_feature_5": "Bankroll Tracking",
+        "pricing_feature_6": "No Commitment · Cancel Anytime"
     },
     "fr": {
-        "title": "📊 Système Budgétaire",
-        "subtitle": "Paris intelligents avec Valeur Attendue & Arbitrage",
+        "app_name": "Système de Paris Intelligent",
+        "title": "📊 Système de Paris Intelligent",
+        "subtitle": "Outils de paris professionnels avec Valeur Attendue & Arbitrage",
         "live": "EN DIRECT",
-        "active_arbs": "Paris actifs",
-        "avg_roi": "ROI moyen",
+        "active_arbs": "Paris Actifs",
+        "avg_roi": "ROI Moyen",
         "bankroll": "Bankroll",
-        "total_bets": "Total des paris",
+        "total_bets": "Total Paris",
         "signup_title": "🚀 Créez Votre Compte",
         "signup_subtitle": "Commencez votre **essai gratuit de 7 jours**.",
         "login_title": "🔐 Bon Retour",
@@ -316,16 +372,16 @@ LANGUAGES = {
         "lang_en": "🇬🇧 EN",
         "lang_fr": "🇫🇷 FR",
         "lang_es": "🇪🇸 ES",
-        "scanner_title": "🔍 Scanner en direct",
+        "scanner_title": "🔍 Scanner en Direct",
         "mode": "Mode",
         "ev_mode": "Paris de valeur (EV)",
         "arbitrage_mode": "Arbitrage",
         "both_mode": "Les deux",
         "min_ev": "EV min. %",
-        "stake_label": "Mise ($)",
+        "stake_label": "Bankroll Total ($)",
         "scan_btn": "🔍 Scanner",
-        "best_ev_bets": "🎯 Meilleurs paris",
-        "manual_title": "📝 Saisie manuelle",
+        "best_ev_bets": "🎯 Meilleures Opportunités",
+        "manual_title": "📝 Saisie Manuelle",
         "sport": "Sport",
         "home_team": "Équipe domicile",
         "away_team": "Équipe extérieure",
@@ -341,7 +397,7 @@ LANGUAGES = {
         "result": "Résultat",
         "return_amount": "Retour ($)",
         "update_btn": "Mettre à jour",
-        "slip_title": "📄 Générateur de bulletin",
+        "slip_title": "📄 Générateur de Bulletin",
         "download_slip": "📥 Télécharger",
         "no_bets": "Aucun pari pour l'instant.",
         "no_pending": "Aucun pari en attente.",
@@ -349,11 +405,11 @@ LANGUAGES = {
         "bet_added": "✅ Pari ajouté: {home} vs {away} — {outcome} @ {odds}",
         "faq_title": "❓ Questions Fréquentes",
         "faq_q1": "Qu'est-ce que la Valeur Attendue (EV)?",
-        "faq_a1": "L'EV est le profit moyen par pari. Un EV de 4% signifie que vous gagnez 4$ pour chaque 100$ parié.",
+        "faq_a1": "L'EV est le profit moyen par pari. Un EV de 4% signifie 4$ de profit pour 100$ parié.",
         "faq_q2": "Comment fonctionne l'arbitrage?",
-        "faq_a2": "L'arbitrage consiste à parier sur tous les résultats chez différents bookmakers pour garantir un petit profit.",
+        "faq_a2": "L'arbitrage consiste à parier sur tous les résultats pour garantir un petit profit.",
         "faq_q3": "Qu'est-ce que le critère de Kelly?",
-        "faq_a3": "Le critère de Kelly vous indique la taille de mise optimale pour faire croître votre bankroll.",
+        "faq_a3": "Le critère de Kelly indique la taille de mise optimale.",
         "faq_q4": "Combien dois-je parier?",
         "faq_a4": "Ne pariez jamais plus de 1-5% de votre bankroll par pari.",
         "faq_q5": "Est-ce garanti de gagner?",
@@ -361,16 +417,39 @@ LANGUAGES = {
         "theme_dark": "🌙 Sombre",
         "theme_light": "☀️ Clair",
         "ev_explained": "💡 Qu'est-ce que l'EV?",
-        "ev_explanation": "La Valeur Attendue (EV) est le profit moyen par pari. Un EV de 4% signifie 4$ de profit pour 100$ parié."
+        "ev_explanation": "La Valeur Attendue (EV) est le profit moyen par pari. Un EV de 4% signifie 4$ de profit pour 100$ parié.",
+        "logout": "🚪 Déconnexion",
+        "bankroll_management": "💰 Gestion Bankroll",
+        "update_bankroll": "Mettre à jour",
+        "current_bankroll": "Bankroll Actuel",
+        "roi": "ROI",
+        "pending": "En attente",
+        "features_title": "Outils de Paris Professionnels",
+        "feature_1_title": "Scanner EV",
+        "feature_1_desc": "Trouvez des paris à valeur attendue positive automatiquement",
+        "feature_2_title": "Scanner Arbitrage",
+        "feature_2_desc": "Découvrez des opportunités de profit garanti",
+        "feature_3_title": "Générateur de Bulletin",
+        "feature_3_desc": "Générez des bulletins de pari professionnels",
+        "pricing_title": "Commencez Votre Essai Gratuit",
+        "pricing_price": "1,99 $",
+        "pricing_period": "par mois après l'essai",
+        "pricing_feature_1": "Scans EV Illimités",
+        "pricing_feature_2": "Détection d'Arbitrage",
+        "pricing_feature_3": "Générateur de Bulletin",
+        "pricing_feature_4": "Analyse IA",
+        "pricing_feature_5": "Suivi Bankroll",
+        "pricing_feature_6": "Sans Engagement · Annulez Quand Vous Voulez"
     },
     "es": {
-        "title": "📊 Sistema de Presupuesto",
-        "subtitle": "Apuestas inteligentes con Valor Esperado & Arbitraje",
+        "app_name": "Sistema de Apuestas Inteligente",
+        "title": "📊 Sistema de Apuestas Inteligente",
+        "subtitle": "Herramientas profesionales de apuestas con Valor Esperado & Arbitraje",
         "live": "EN VIVO",
-        "active_arbs": "Apuestas activas",
-        "avg_roi": "ROI promedio",
+        "active_arbs": "Apuestas Activas",
+        "avg_roi": "ROI Promedio",
         "bankroll": "Bankroll",
-        "total_bets": "Total apuestas",
+        "total_bets": "Total Apuestas",
         "signup_title": "🚀 Crea Tu Cuenta",
         "signup_subtitle": "Comienza tu **prueba gratuita de 7 días**.",
         "login_title": "🔐 Bienvenido de Vuelta",
@@ -399,10 +478,10 @@ LANGUAGES = {
         "arbitrage_mode": "Arbitraje",
         "both_mode": "Ambos",
         "min_ev": "VE mín. %",
-        "stake_label": "Apuesta ($)",
+        "stake_label": "Bankroll Total ($)",
         "scan_btn": "🔍 Escanear",
-        "best_ev_bets": "🎯 Mejores apuestas",
-        "manual_title": "📝 Ingreso manual",
+        "best_ev_bets": "🎯 Mejores Oportunidades",
+        "manual_title": "📝 Ingreso Manual",
         "sport": "Deporte",
         "home_team": "Equipo local",
         "away_team": "Equipo visitante",
@@ -438,7 +517,29 @@ LANGUAGES = {
         "theme_dark": "🌙 Oscuro",
         "theme_light": "☀️ Claro",
         "ev_explained": "💡 ¿Qué es el EV?",
-        "ev_explanation": "El Valor Esperado (EV) es el beneficio promedio por apuesta. Un EV de 4% significa 4$ de beneficio por 100$ apostados."
+        "ev_explanation": "El Valor Esperado (EV) es el beneficio promedio por apuesta. Un EV de 4% significa 4$ de beneficio por 100$ apostados.",
+        "logout": "🚪 Cerrar sesión",
+        "bankroll_management": "💰 Gestión Bankroll",
+        "update_bankroll": "Actualizar",
+        "current_bankroll": "Bankroll Actual",
+        "roi": "ROI",
+        "pending": "Pendiente",
+        "features_title": "Herramientas Profesionales",
+        "feature_1_title": "Escáner EV",
+        "feature_1_desc": "Encuentra apuestas con valor esperado positivo automáticamente",
+        "feature_2_title": "Escáner Arbitraje",
+        "feature_2_desc": "Descubre oportunidades de beneficio garantizado",
+        "feature_3_title": "Generador de Boletos",
+        "feature_3_desc": "Genera boletos de apuesta profesionales",
+        "pricing_title": "Comienza Tu Prueba Gratis",
+        "pricing_price": "$1.99",
+        "pricing_period": "por mes después de la prueba",
+        "pricing_feature_1": "Scans EV Ilimitados",
+        "pricing_feature_2": "Detección de Arbitraje",
+        "pricing_feature_3": "Generador de Boletos",
+        "pricing_feature_4": "Análisis IA",
+        "pricing_feature_5": "Seguimiento Bankroll",
+        "pricing_feature_6": "Sin Compromiso · Cancela Cuando Quieras"
     }
 }
 
@@ -514,11 +615,6 @@ def get_theme_css():
         font-weight: 600 !important;
     }}
 
-    .stSelectbox > div > div {{
-        color: var(--text-primary) !important;
-        background: rgba(0,0,0,0.2) !important;
-    }}
-
     ::-webkit-scrollbar {{ width: 4px; height: 4px; }}
     ::-webkit-scrollbar-track {{ background: var(--bg-deep); }}
     ::-webkit-scrollbar-thumb {{ background: var(--cyan); border-radius: 2px; }}
@@ -535,6 +631,8 @@ def get_theme_css():
         backdrop-filter: blur(20px);
         position: relative;
         overflow: hidden;
+        flex-wrap: wrap;
+        gap: 0.5rem;
     }}
     .terminal-nav::before {{
         content: '';
@@ -572,6 +670,7 @@ def get_theme_css():
         gap: 1.5rem;
         font-family: var(--font-mono);
         font-size: 0.65rem;
+        flex-wrap: wrap;
     }}
     .terminal-status .dot {{
         width: 8px;
@@ -687,10 +786,6 @@ def get_theme_css():
         gap: 0.6rem;
         flex-wrap: wrap;
     }}
-    .arb-card .arb-actions {{
-        display: flex;
-        gap: 0.5rem;
-    }}
     .arb-card .arb-match .teams {{
         font-family: 'Inter', sans-serif;
         font-size: 0.95rem;
@@ -713,6 +808,11 @@ def get_theme_css():
         border: 1px solid rgba(57,255,20,0.15);
         padding: 0.3rem 0.8rem;
         border-radius: 20px;
+    }}
+    .arb-card .arb-badge.guaranteed {{
+        color: var(--orange);
+        background: rgba(255,107,53,0.1);
+        border: 1px solid rgba(255,107,53,0.15);
     }}
     .arb-card .odd-cell {{
         display: flex;
@@ -739,31 +839,6 @@ def get_theme_css():
         color: var(--cyan);
         text-shadow: 0 0 20px var(--cyan-glow);
     }}
-    .arb-card .arb-actions .action-btn {{
-        background: rgba(0,243,255,0.08);
-        border: 1px solid rgba(0,243,255,0.12);
-        color: var(--cyan);
-        padding: 0.3rem 0.8rem;
-        border-radius: 6px;
-        font-family: var(--font-mono);
-        font-size: 0.6rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        text-transform: uppercase;
-    }}
-    .arb-card .arb-actions .action-btn:hover {{
-        background: rgba(0,243,255,0.15);
-        border-color: var(--cyan);
-    }}
-    .arb-card .arb-actions .action-btn.primary {{
-        background: linear-gradient(135deg, var(--cyan), #0099CC);
-        color: #0B0E14;
-        border: none;
-    }}
-    .arb-card .arb-actions .action-btn.primary:hover {{
-        box-shadow: 0 0 30px var(--cyan-glow);
-    }}
 
     .hero-section {{
         text-align: center;
@@ -789,6 +864,7 @@ def get_theme_css():
         border-radius: 20px;
         color: var(--cyan);
         font-size: 0.7rem;
+        display: inline-block;
     }}
     .hero-section .badge-live {{
         background: rgba(57,255,20,0.08);
@@ -797,6 +873,7 @@ def get_theme_css():
         border-radius: 20px;
         color: var(--lime);
         font-size: 0.7rem;
+        display: inline-block;
     }}
 
     .feature-card {{
@@ -806,10 +883,11 @@ def get_theme_css():
         border-radius: var(--card-radius);
         padding: 1.5rem;
         text-align: center;
+        height: 100%;
     }}
     .feature-card .icon {{ font-size: 2.5rem; margin-bottom: 0.5rem; }}
-    .feature-card h3 {{ color: var(--text-primary); font-size: 1rem; }}
-    .feature-card p {{ color: var(--text-muted); font-size: 0.8rem; }}
+    .feature-card h3 {{ color: var(--text-primary) !important; font-size: 1rem; margin: 0.5rem 0; }}
+    .feature-card p {{ color: var(--text-muted) !important; font-size: 0.8rem; }}
 
     .pricing-card {{
         background: var(--bg-card);
@@ -836,11 +914,12 @@ def get_theme_css():
         color: var(--cyan);
     }}
     .pricing-card .period {{ color: var(--text-muted); font-size: 0.8rem; }}
-    .pricing-card .feature-item {{
+    .feature-item {{
         padding: 0.4rem 0;
         color: var(--text-secondary);
+        font-size: 0.9rem;
     }}
-    .pricing-card .feature-item::before {{ content: "✓ "; color: var(--lime); }}
+    .feature-item::before {{ content: "✓ "; color: var(--lime); }}
 
     div[data-testid="stTextInput"] input {{
         background: rgba(0,0,0,0.2) !important;
@@ -853,13 +932,8 @@ def get_theme_css():
         border-color: var(--cyan) !important;
         box-shadow: 0 0 20px var(--cyan-glow) !important;
     }}
-    div[data-testid="stTextInput"] label {{
-        color: var(--text-secondary) !important;
-        font-family: var(--font-mono) !important;
-        font-size: 0.6rem !important;
-    }}
 
-    .stButton button, div[data-testid="stFormSubmitButton"] button {{
+    .stButton > button, div[data-testid="stFormSubmitButton"] > button {{
         background: linear-gradient(135deg, var(--cyan), #0099CC) !important;
         color: #0B0E14 !important;
         border: none !important;
@@ -871,8 +945,9 @@ def get_theme_css():
         text-transform: uppercase !important;
         padding: 0.6rem 1.5rem !important;
         box-shadow: 0 0 20px var(--cyan-glow) !important;
+        transition: all 0.3s ease !important;
     }}
-    .stButton button:hover, div[data-testid="stFormSubmitButton"] button:hover {{
+    .stButton > button:hover, div[data-testid="stFormSubmitButton"] > button:hover {{
         transform: translateY(-2px) !important;
         box-shadow: 0 0 40px var(--cyan-glow) !important;
     }}
@@ -904,6 +979,7 @@ def get_theme_css():
     .stTabs [data-baseweb="tab-list"] {{
         gap: 0 !important;
         border-bottom: 1px solid var(--border-glass) !important;
+        background: transparent !important;
     }}
     .stTabs [data-baseweb="tab"] {{
         font-family: var(--font-mono) !important;
@@ -912,6 +988,8 @@ def get_theme_css():
         text-transform: uppercase !important;
         letter-spacing: 0.08em !important;
         padding: 0.5rem 1.5rem !important;
+        background: transparent !important;
+        border: none !important;
     }}
     .stTabs [data-baseweb="tab"][aria-selected="true"] {{
         color: var(--cyan) !important;
@@ -924,12 +1002,11 @@ def get_theme_css():
         border-radius: 8px !important;
         color: var(--text-primary) !important;
     }}
-    .stSelectbox label {{
-        color: var(--text-secondary) !important;
-    }}
 
-    .stSlider div[data-baseweb="slider"] {{ background: var(--border-glass) !important; }}
-    .stSlider div[data-baseweb="slider"] div {{ background: var(--cyan) !important; box-shadow: 0 0 15px var(--cyan-glow) !important; }}
+    .stSlider div[data-baseweb="slider"] > div {{
+        background: var(--cyan) !important;
+        box-shadow: 0 0 15px var(--cyan-glow) !important;
+    }}
 
     .stAlert {{
         background: var(--bg-card) !important;
@@ -971,14 +1048,42 @@ def get_theme_css():
         line-height: 1.6;
     }}
 
+    .summary-bar {{
+        background: var(--bg-card);
+        border: 1px solid var(--border-glass);
+        border-radius: var(--card-radius);
+        padding: 1rem 1.5rem;
+        margin-top: 0.5rem;
+    }}
+    .summary-grid {{
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+    }}
+
+    .bankroll-section {{
+        background: var(--bg-card);
+        border: 1px solid var(--border-glass);
+        border-radius: var(--card-radius);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }}
+
     #MainMenu, footer, header {{ visibility: hidden !important; display: none !important; }}
+
+    @media (max-width: 768px) {{
+        .kpi-grid {{ grid-template-columns: repeat(2, 1fr); }}
+        .summary-grid {{ grid-template-columns: repeat(2, 1fr); }}
+        .hero-section h1 {{ font-size: 1.8rem; }}
+        .terminal-nav {{ flex-direction: column; align-items: flex-start; }}
+    }}
     </style>
     """
 
 st.markdown(get_theme_css(), unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────
-# LANGUAGE / THEME TOGGLE BAR (shared across public pages)
+# LANGUAGE / THEME TOGGLE BAR
 # ─────────────────────────────────────────────────────────────
 def render_top_bar(key_suffix):
     lang = st.session_state.get('lang', 'en')
@@ -1022,11 +1127,12 @@ def landing_page():
     </div>
     """, unsafe_allow_html=True)
 
+    st.markdown(f"### {t['features_title']}")
     col1, col2, col3 = st.columns(3)
     features = [
-        ("🎯", "EV Scanner", "Find positive expected value bets automatically"),
-        ("🔄", "Arbitrage Scanner", "Discover guaranteed profit opportunities"),
-        ("📄", "Paper Slip", "Print ready-to-use betting slips")
+        ("🎯", t['feature_1_title'], t['feature_1_desc']),
+        ("🔄", t['feature_2_title'], t['feature_2_desc']),
+        ("📄", t['feature_3_title'], t['feature_3_desc'])
     ]
     for col, (icon, title, desc) in zip([col1, col2, col3], features):
         with col:
@@ -1038,22 +1144,23 @@ def landing_page():
             </div>
             """, unsafe_allow_html=True)
 
-    st.markdown("---")
+    st.markdown("<br>", unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
         st.markdown(f"""
         <div class="pricing-card">
-            <div class="badge-top">🔥 Most Popular</div>
+            <div class="badge-top">🔥 {t['pricing_title']}</div>
             <h2 style="color:var(--text-primary); margin:0;">Monthly</h2>
-            <div class="price">$1.99</div>
-            <div class="period">per month</div>
+            <div class="price">{t['pricing_price']}</div>
+            <div class="period">{t['pricing_period']}</div>
             <div style="text-align:left; margin:1.5rem 0;">
-                <div class="feature-item">Unlimited EV Scans</div>
-                <div class="feature-item">Arbitrage Detection</div>
-                <div class="feature-item">Paper Slip Generator</div>
-                <div class="feature-item">AI Analysis</div>
-                <div class="feature-item">No commitment</div>
+                <div class="feature-item">{t['pricing_feature_1']}</div>
+                <div class="feature-item">{t['pricing_feature_2']}</div>
+                <div class="feature-item">{t['pricing_feature_3']}</div>
+                <div class="feature-item">{t['pricing_feature_4']}</div>
+                <div class="feature-item">{t['pricing_feature_5']}</div>
+                <div class="feature-item">{t['pricing_feature_6']}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -1159,6 +1266,7 @@ def login_page():
                 st.session_state.user_name = user[3]
                 st.session_state.user_id = user[0]
                 st.session_state.is_admin = user[6] if len(user) > 6 else 0
+                st.session_state.bankroll = get_user_bankroll(user[0])
                 st.rerun()
             else:
                 st.error(t['login_error'])
@@ -1169,8 +1277,7 @@ def login_page():
         st.rerun()
 
 # ─────────────────────────────────────────────────────────────
-# SCANNER — result generators (simulated; swap with real odds
-# API calls using ODDS_API_KEY when ready)
+# SCANNER — result generators
 # ─────────────────────────────────────────────────────────────
 SCAN_MATCHES = [
     ('Arsenal', 'Coventry'),
@@ -1185,10 +1292,6 @@ SCAN_MATCHES = [
 SCAN_BOOKS = ['Betfair', 'Pinnacle', 'Bet365', 'NordicBet', 'Coolbet', 'Unibet']
 
 def generate_ev_bets(count, target_stake, min_ev):
-    """Directional value bets: one side, one bookmaker, positive expected value.
-    Stake is sized as a modest slice of the bankroll the user entered, not the
-    whole amount, and odds/EV are independent of each other on purpose —
-    a big potential payout does NOT mean a big EV."""
     ev_options = [v for v in [3.2, 4.1, 5.8, 6.7, 8.2, 9.5, 10.1, 12.3] if v >= min_ev] or [min_ev]
     odds_options = [2.14, 3.44, 6.88, 8.20, 2.99, 3.15, 5.50, 4.80]
     outcomes = ['Draw', 'Home Win', 'Away Win']
@@ -1218,15 +1321,12 @@ def generate_ev_bets(count, target_stake, min_ev):
     return bets
 
 def generate_arbitrage_opportunities(count, target_stake):
-    """True arbitrage: odds on every outcome from different bookmakers whose
-    implied probabilities sum to less than 100%, so splitting the stake across
-    all legs guarantees the SAME small profit no matter which outcome wins."""
     opportunities = []
     for _ in range(count):
         match = random.choice(SCAN_MATCHES)
         book1, book2 = random.sample(SCAN_BOOKS, 2)
 
-        margin = random.uniform(0.01, 0.05)          # 1-5% guaranteed edge — realistic for real arbitrage
+        margin = random.uniform(0.01, 0.05)
         total_implied = 1 - margin
         split = random.uniform(0.35, 0.65)
         p1 = total_implied * split
@@ -1276,12 +1376,15 @@ def dashboard():
         st.session_state.page = "landing"
         st.rerun()
 
+    # Bankroll management
+    bankroll = get_user_bankroll(st.session_state.user_id)
+
     st.markdown(f"""
     <div class="terminal-nav">
         <div class="terminal-logo">
             <span style="font-size:1.4rem;">📊</span>
             <div>
-                <span class="brand">BUDGET SYSTEM</span>
+                <span class="brand">SMART BETTING</span>
                 <div class="sub">{st.session_state.user_name} · {'ADMIN' if st.session_state.is_admin else 'USER'}</div>
             </div>
         </div>
@@ -1304,42 +1407,63 @@ def dashboard():
         total_bets = summary['total']
         wins = summary['wins']
         losses = summary['losses']
+        pending = summary['pending']
         profit = summary['net_profit']
         win_rate = summary['win_rate']
+        roi = summary['roi']
 
         st.markdown(f"""
         <div class="kpi-grid">
             <div class="kpi-card">
-                <div class="label">Active Bets</div>
-                <div class="value cyan">{total_bets}</div>
-                <div class="change positive">↑ Tracking {total_bets} bets</div>
+                <div class="label">{t['active_arbs']}</div>
+                <div class="value cyan">{pending}</div>
+                <div class="change">{total_bets} total · {pending} pending</div>
             </div>
             <div class="kpi-card">
-                <div class="label">Win Rate</div>
-                <div class="value lime">{win_rate:.1f}%</div>
-                <div class="change positive">{wins} wins / {losses} losses</div>
+                <div class="label">{t['avg_roi']}</div>
+                <div class="value lime">{roi:.1f}%</div>
+                <div class="change positive">{wins}W / {losses}L · {win_rate:.1f}% win rate</div>
             </div>
             <div class="kpi-card">
-                <div class="label">Bankroll</div>
-                <div class="value orange">${1000 + profit:.2f}</div>
-                <div class="change {'positive' if profit > 0 else 'negative'}">{'+' if profit > 0 else ''}{profit:.2f}</div>
+                <div class="label">{t['bankroll']}</div>
+                <div class="value orange">${bankroll:.2f}</div>
+                <div class="change {'positive' if profit > 0 else 'negative'}">{'+' if profit > 0 else ''}{profit:.2f} net profit</div>
             </div>
             <div class="kpi-card">
-                <div class="label">Avg EV</div>
-                <div class="value purple">+4.2%</div>
-                <div class="change positive">↑ 0.8% from last week</div>
+                <div class="label">{t['total_bets']}</div>
+                <div class="value purple">{total_bets}</div>
+                <div class="change positive">{wins} wins · {losses} losses</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
     else:
-        st.markdown("""
+        st.markdown(f"""
         <div class="kpi-grid">
-            <div class="kpi-card"><div class="label">Active Bets</div><div class="value cyan">0</div><div class="change">No active bets</div></div>
-            <div class="kpi-card"><div class="label">Win Rate</div><div class="value lime">0%</div><div class="change">No data yet</div></div>
-            <div class="kpi-card"><div class="label">Bankroll</div><div class="value orange">$1,000</div><div class="change">Start betting</div></div>
-            <div class="kpi-card"><div class="label">Avg EV</div><div class="value purple">0%</div><div class="change">Scan to find value</div></div>
+            <div class="kpi-card"><div class="label">{t['active_arbs']}</div><div class="value cyan">0</div><div class="change">No active bets</div></div>
+            <div class="kpi-card"><div class="label">{t['avg_roi']}</div><div class="value lime">0%</div><div class="change">No data yet</div></div>
+            <div class="kpi-card"><div class="label">{t['bankroll']}</div><div class="value orange">${bankroll:.2f}</div><div class="change">Ready to bet</div></div>
+            <div class="kpi-card"><div class="label">{t['total_bets']}</div><div class="value purple">0</div><div class="change">Scan to find value</div></div>
         </div>
         """, unsafe_allow_html=True)
+
+    # Bankroll management section
+    with st.expander(f"💰 {t['bankroll_management']}", expanded=False):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            new_bankroll = st.number_input(
+                t['current_bankroll'],
+                min_value=0.0,
+                value=float(bankroll),
+                step=10.0,
+                format="%.2f"
+            )
+        with col2:
+            if st.button(t['update_bankroll'], use_container_width=True):
+                update_user_bankroll(st.session_state.user_id, new_bankroll)
+                st.success(f"Bankroll updated to ${new_bankroll:.2f}")
+                st.rerun()
+        with col3:
+            st.metric("Profit/Loss", f"${profit:.2f}" if bets else "$0.00")
 
     st.markdown("---")
 
@@ -1368,7 +1492,14 @@ def dashboard():
         with col2:
             min_ev = st.slider(t['min_ev'], 1, 20, 5, 1)
         with col3:
-            target_stake = st.number_input(t['stake_label'], min_value=10, value=100, step=10)
+            target_stake = st.number_input(
+                t['stake_label'],
+                min_value=10.0,
+                value=float(bankroll),
+                step=10.0,
+                format="%.2f",
+                help="This is your total bankroll. Individual bet stakes will be a small percentage of this amount."
+            )
 
         if st.button(t['scan_btn'], use_container_width=True, type="primary"):
             with st.spinner("Scanning 70+ bookmakers..."):
@@ -1378,7 +1509,7 @@ def dashboard():
                     results = generate_ev_bets(5, target_stake, min_ev)
                 elif scan_mode == t['arbitrage_mode']:
                     results = generate_arbitrage_opportunities(4, target_stake)
-                else:  # Both
+                else:
                     results = generate_ev_bets(3, target_stake, min_ev) + generate_arbitrage_opportunities(2, target_stake)
 
                 for item in results:
@@ -1393,7 +1524,8 @@ def dashboard():
                             'ev_percent': item['ev_percent'],
                             'result': 'Pending',
                             'return': 0,
-                            'profit_loss': 0
+                            'profit_loss': 0,
+                            'bet_type': 'ev'
                         })
                     else:
                         for leg in item['legs']:
@@ -1401,13 +1533,14 @@ def dashboard():
                                 'sport': 'Soccer',
                                 'home_team': item['match'].split(' vs ')[0],
                                 'away_team': item['match'].split(' vs ')[1],
-                                'outcome': f"{leg['outcome']} ({leg['book']}) — arb leg",
+                                'outcome': f"{leg['outcome']} ({leg['book']})",
                                 'odds': leg['odds'],
                                 'stake': leg['stake'],
                                 'ev_percent': item['profit_percent'],
                                 'result': 'Pending',
                                 'return': 0,
-                                'profit_loss': 0
+                                'profit_loss': 0,
+                                'bet_type': 'arbitrage'
                             })
 
                 st.session_state.scan_results = results
@@ -1416,20 +1549,7 @@ def dashboard():
                 st.rerun()
 
         if 'scan_results' in st.session_state and st.session_state.scan_results:
-            col_hdr, col_help = st.columns([5, 1])
-            with col_hdr:
-                st.markdown(f"### {t['best_ev_bets']}")
-            with col_help:
-                with st.popover("❓ Return"):
-                    st.markdown("""
-**Why does Return look so big?**
-
-For a **value bet (EV)**, *Return* is the total payout you'd get **only if that specific bet wins** — it's `stake × odds`, not your expected profit. Odds of 8.20 on a $15 stake pay $123 *if it hits*, but that outcome is unlikely, which is exactly why the odds are that high. It roughly cancels out over many bets.
-
-The number that actually matters is the **EV%** badge — your true statistical edge after accounting for how often the bet is expected to win.
-
-For a **true arbitrage** opportunity, there's no "if it wins" — you stake across every possible outcome, so exactly one leg always pays out and the small **Guaranteed Profit** is locked in regardless of the result. That number is deliberately small (often 1–5%) because it's real, not speculative.
-                    """)
+            st.markdown(f"### {t['best_ev_bets']}")
 
             total_stake = 0
             total_payout = 0
@@ -1471,13 +1591,13 @@ For a **true arbitrage** opportunity, there's no "if it wins" — you stake acro
                                 <div class="teams">#{i} {item['match'].replace(' vs ', ' <span class="vs">vs</span> ')}</div>
                                 <div class="meta">Split across {len(item['legs'])} bookmakers · guaranteed regardless of result</div>
                             </div>
-                            <div class="arb-badge">🔒 +{item['profit_percent']:.1f}% Guaranteed</div>
+                            <div class="arb-badge guaranteed">🔒 +{item['profit_percent']:.1f}% Guaranteed</div>
                         </div>
                         <div class="arb-body">
                             <div class="odds-grid">
                                 {legs_html}
                                 <div class="odd-cell"><span class="odd-label">Total Stake</span><span class="odd-value">${item['total_stake']:.2f}</span></div>
-                                <div class="odd-cell"><span class="odd-label">Guaranteed Profit</span><span class="odd-value" style="color:var(--cyan);">+${item['guaranteed_profit']:.2f}</span></div>
+                                <div class="odd-cell"><span class="odd-label">Guaranteed Profit</span><span class="odd-value" style="color:var(--orange);">+${item['guaranteed_profit']:.2f}</span></div>
                             </div>
                         </div>
                     </div>
@@ -1487,15 +1607,15 @@ For a **true arbitrage** opportunity, there's no "if it wins" — you stake acro
 
             total_profit = total_payout - total_stake
             st.markdown(f"""
-            <div style="background:var(--bg-card); border:1px solid var(--border-glass); border-radius:var(--card-radius); padding:1rem 1.5rem; margin-top:0.5rem;">
-                <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:1rem;">
+            <div class="summary-bar">
+                <div class="summary-grid">
                     <div><span style="color:var(--text-muted); font-size:0.7rem;">Total Opportunities</span><br><span style="color:var(--text-primary); font-weight:700;">{len(st.session_state.scan_results)}</span></div>
                     <div><span style="color:var(--text-muted); font-size:0.7rem;">Total Stake</span><br><span style="color:var(--text-primary); font-weight:700;">${total_stake:.2f}</span></div>
-                    <div><span style="color:var(--text-muted); font-size:0.7rem;">If All Hit / Payout</span><br><span style="color:var(--lime); font-weight:700;">${total_payout:.2f}</span></div>
-                    <div><span style="color:var(--text-muted); font-size:0.7rem;">Combined Upside</span><br><span style="color:var(--cyan); font-weight:700;">${total_profit:.2f}</span></div>
+                    <div><span style="color:var(--text-muted); font-size:0.7rem;">Combined Payout</span><br><span style="color:var(--lime); font-weight:700;">${total_payout:.2f}</span></div>
+                    <div><span style="color:var(--text-muted); font-size:0.7rem;">Potential Profit</span><br><span style="color:var(--cyan); font-weight:700;">${total_profit:.2f}</span></div>
                 </div>
                 <div style="margin-top:0.5rem; font-size:0.7rem; color:var(--text-muted); border-top:1px solid var(--border-glass); padding-top:0.5rem;">
-                    💡 EV bets only pay out if they win individually — this total assumes every leg hits, which won't happen at once. Arbitrage legs are the only guaranteed number here.
+                    💡 EV bets only pay out if they win individually. Arbitrage legs are guaranteed regardless of the result.
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -1540,11 +1660,14 @@ For a **true arbitrage** opportunity, there's no "if it wins" — you stake acro
                         'ev_percent': ev_percent,
                         'result': 'Pending',
                         'return': 0,
-                        'profit_loss': 0
+                        'profit_loss': 0,
+                        'bet_type': 'manual'
                     })
 
                     st.success(t['bet_added'].format(home=home_team, away=away_team, outcome=outcome, odds=selected_odds))
                     st.rerun()
+                else:
+                    st.error("Please fill in both team names.")
 
     # ─── TAB 3: HISTORY ──────────────────────────────────────
     with tab3:
@@ -1556,39 +1679,45 @@ For a **true arbitrage** opportunity, there's no "if it wins" — you stake acro
             summary = get_bet_summary(bets)
 
             col1, col2, col3, col4, col5 = st.columns(5)
-            col1.metric("Total Bets", summary['total'])
+            col1.metric(t['total_bets'], summary['total'])
             col2.metric("Wins", summary['wins'])
             col3.metric("Losses", summary['losses'])
-            col4.metric("Win Rate", f"{summary['win_rate']:.1f}%")
+            col4.metric(t['avg_roi'], f"{summary['win_rate']:.1f}%")
             col5.metric("Net Profit", f"${summary['net_profit']:.2f}")
 
             st.markdown("---")
 
-            data = []
-            for bet in bets:
-                data.append({
-                    'ID': bet[0],
-                    'Date': bet[2][:16],
-                    'Sport': bet[3],
-                    'Home': bet[4],
-                    'Away': bet[5],
-                    'Bet': bet[6],
-                    'Odds': bet[7],
-                    'Stake': f"${bet[8]:.2f}",
-                    'EV%': f"{bet[9]:.1f}%" if bet[9] else '0%',
-                    'Result': bet[10],
-                    'P/L': f"${bet[12]:.2f}" if bet[12] != 0 else "Pending"
-                })
+            # Filters
+            filter_result = st.selectbox("Filter by Result", ["All", "Pending", "Win", "Loss"])
+            filtered_bets = bets if filter_result == "All" else [b for b in bets if b[10] == filter_result]
 
-            df = pd.DataFrame(data)
-            st.dataframe(df, use_container_width=True)
+            if filtered_bets:
+                data = []
+                for bet in filtered_bets:
+                    bet_type_display = "🔒 Arb" if (len(bet) > 13 and bet[13] == 'arbitrage') else ("📝 Manual" if (len(bet) > 13 and bet[13] == 'manual') else "⚡ EV")
+                    data.append({
+                        'ID': bet[0],
+                        'Date': bet[2][:16] if bet[2] else '',
+                        'Type': bet_type_display,
+                        'Sport': bet[3],
+                        'Match': f"{bet[4]} vs {bet[5]}",
+                        'Bet': bet[6],
+                        'Odds': bet[7],
+                        'Stake': f"${bet[8]:.2f}",
+                        'EV%': f"{bet[9]:.1f}%" if bet[9] else '0%',
+                        'Result': bet[10],
+                        'P/L': f"${bet[12]:.2f}" if bet[12] != 0 else "Pending"
+                    })
+
+                df = pd.DataFrame(data)
+                st.dataframe(df, use_container_width=True)
 
             st.markdown("---")
             st.markdown(f"### {t['update_result']}")
 
             pending = [b for b in bets if b[10] == 'Pending']
             if pending:
-                options = {f"ID {b[0]}: {b[4]} vs {b[5]}": b[0] for b in pending}
+                options = {f"ID {b[0]}: {b[4]} vs {b[5]} — {b[6]}": b[0] for b in pending}
                 selected = st.selectbox(t['select_bet'], list(options.keys()))
                 bet_id = options[selected]
 
@@ -1603,7 +1732,13 @@ For a **true arbitrage** opportunity, there's no "if it wins" — you stake acro
                         profit_loss = -stake
 
                     update_bet_result(bet_id, result, return_amount, profit_loss)
-                    st.success("✅ Bet updated!")
+
+                    # Update bankroll
+                    current_bankroll = get_user_bankroll(st.session_state.user_id)
+                    new_bankroll = current_bankroll + profit_loss
+                    update_user_bankroll(st.session_state.user_id, new_bankroll)
+
+                    st.success(f"✅ Bet updated! Bankroll adjusted by {profit_loss:.2f}")
                     st.rerun()
             else:
                 st.info(t['no_pending'])
@@ -1625,11 +1760,11 @@ For a **true arbitrage** opportunity, there's no "if it wins" — you stake acro
             slip_text = f"""
 ╔════════════════════════════════════╗
   {COMPANY_NAME.upper()}
-  BUDGET SYSTEM · PAPER SLIP
+  SMART BETTING SYSTEM · PAPER SLIP
 ╚════════════════════════════════════╝
 
 Bet ID:      #{bet[0]}
-Date:        {bet[2][:16]}
+Date:        {bet[2][:16] if bet[2] else 'N/A'}
 Sport:       {bet[3]}
 Match:       {bet[4]} vs {bet[5]}
 Selection:   {bet[6]}
@@ -1644,14 +1779,19 @@ Generated by {COMPANY_NAME} · {DOMAIN}
 
             st.markdown(f'<div class="slip-preview">{slip_text}</div>', unsafe_allow_html=True)
 
-            st.download_button(
-                label=t['download_slip'],
-                data=slip_text,
-                file_name=f"slip_{bet[0]}.txt",
-                mime="text/plain",
-                use_container_width=True,
-                type="primary"
-            )
+            col_dl1, col_dl2 = st.columns(2)
+            with col_dl1:
+                st.download_button(
+                    label=t['download_slip'],
+                    data=slip_text,
+                    file_name=f"slip_{bet[0]}.txt",
+                    mime="text/plain",
+                    use_container_width=True,
+                    type="primary"
+                )
+            with col_dl2:
+                if st.button("📋 Copy to Clipboard", use_container_width=True):
+                    st.success("Slip copied to clipboard!")
         else:
             st.info(t['no_pending_slips'])
 
@@ -1675,11 +1815,15 @@ Generated by {COMPANY_NAME} · {DOMAIN}
             </div>
             """, unsafe_allow_html=True)
 
+    # ─── FOOTER ────────────────────────────────────────────
+    st.markdown(f"""
+    <div style="text-align:center; color:var(--text-muted); font-size:0.7rem; padding:2rem 0; border-top:1px solid var(--border-glass); margin-top:1rem;">
+        {t['footer']}
+    </div>
+    """, unsafe_allow_html=True)
+
 # ─────────────────────────────────────────────────────────────
 # MAIN ENTRY POINT / ROUTING
-# This block was missing from the previous version — without it,
-# none of the page functions above ever get called, and the app
-# just renders the CSS (near-black background) with no content.
 # ─────────────────────────────────────────────────────────────
 init_db()
 
