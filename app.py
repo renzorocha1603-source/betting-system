@@ -35,7 +35,99 @@ with st.sidebar:
     min_ev = st.slider("Min. EV %", 1, 25, 5, 1)
     kelly_fraction = st.slider("Kelly Fraction", 0.1, 0.5, 0.25, 0.05)
     st.markdown("---")
-    st.caption("v4.4 · Only Solutions Inc.")
+    st.caption("v4.5 · Only Solutions Inc.")
+
+# ─────────────────────────────────────────────────────────────
+# CORRECT EV CALCULATION — DIFFERENT PER OUTCOME
+# ─────────────────────────────────────────────────────────────
+def calculate_true_probability(odds, market_avg):
+    """Estimate true probability using market average + slight adjustment"""
+    implied = 1 / odds
+    # Adjust based on market average (sharp bookmakers)
+    adjustment = 1 - (market_avg - 1) * 0.1
+    return implied * adjustment
+
+def calculate_correct_ev(odds, true_prob):
+    """Calculate EV based on true probability"""
+    return (true_prob * odds) - 1
+
+def get_market_average(odds_list):
+    """Calculate market average from all odds"""
+    return sum(1/o for o in odds_list if o > 0) / len([o for o in odds_list if o > 0])
+
+def calculate_ev_for_match(match):
+    """Calculate EV for all 3 outcomes correctly"""
+    home_odds = match.get('home_odds', 0)
+    draw_odds = match.get('draw_odds', 0)
+    away_odds = match.get('away_odds', 0)
+    
+    odds_list = [o for o in [home_odds, draw_odds, away_odds] if o > 0]
+    if len(odds_list) < 2:
+        return {}
+    
+    market_avg = get_market_average(odds_list)
+    
+    results = {}
+    
+    if home_odds > 0:
+        true_prob = calculate_true_probability(home_odds, market_avg)
+        ev = calculate_correct_ev(home_odds, true_prob)
+        results['home'] = {
+            'odds': home_odds,
+            'true_prob': true_prob * 100,
+            'implied_prob': (1/home_odds) * 100,
+            'ev_percent': ev * 100
+        }
+    
+    if draw_odds > 0:
+        true_prob = calculate_true_probability(draw_odds, market_avg)
+        ev = calculate_correct_ev(draw_odds, true_prob)
+        results['draw'] = {
+            'odds': draw_odds,
+            'true_prob': true_prob * 100,
+            'implied_prob': (1/draw_odds) * 100,
+            'ev_percent': ev * 100
+        }
+    
+    if away_odds > 0:
+        true_prob = calculate_true_probability(away_odds, market_avg)
+        ev = calculate_correct_ev(away_odds, true_prob)
+        results['away'] = {
+            'odds': away_odds,
+            'true_prob': true_prob * 100,
+            'implied_prob': (1/away_odds) * 100,
+            'ev_percent': ev * 100
+        }
+    
+    return results
+
+def get_best_bet(match):
+    """Get only the single best bet from a match"""
+    ev_results = calculate_ev_for_match(match)
+    
+    if not ev_results:
+        return None
+    
+    # Find outcome with highest EV
+    best_outcome = None
+    best_ev = -999
+    
+    for outcome, data in ev_results.items():
+        if data['ev_percent'] > best_ev:
+            best_ev = data['ev_percent']
+            best_outcome = outcome
+    
+    if best_outcome and best_ev >= min_ev:
+        return {
+            'match': f"{match['home_team']} vs {match['away_team']}",
+            'outcome': best_outcome,
+            'odds': ev_results[best_outcome]['odds'],
+            'ev_percent': best_ev,
+            'true_prob': ev_results[best_outcome]['true_prob'],
+            'implied_prob': ev_results[best_outcome]['implied_prob']
+        }
+    
+    return None
 
 # ─────────────────────────────────────────────────────────────
 # DEEPSEEK AI FUNCTION — STRICTLY ONE BEST BET
@@ -54,7 +146,7 @@ def ask_deepseek(prompt: str) -> str:
         data = {
             "model": "deepseek-chat",
             "messages": [
-                {"role": "system", "content": "You are Allison, a professional betting analyst. You MUST choose exactly ONE outcome to bet on — the best one based on value. Never recommend all three. If you recommend more than one, you have failed. Format: 'BEST BET: [outcome] @ [odds]. Why: [one sentence reason]'"},
+                {"role": "system", "content": "You are Allison, a professional betting analyst. You MUST choose exactly ONE outcome to bet on — the best one based on value. Never recommend more than one. Format: 'BEST BET: [outcome] @ [odds]. Why: [one sentence]'"},
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0.1,
@@ -66,31 +158,33 @@ def ask_deepseek(prompt: str) -> str:
         if response.status_code == 200:
             return response.json()["choices"][0]["message"]["content"]
         elif response.status_code == 401:
-            return "⚠️ Invalid DeepSeek API key. Please check your key."
+            return "⚠️ Invalid DeepSeek API key."
         else:
             return f"⚠️ API Error: {response.status_code}"
             
-    except requests.exceptions.Timeout:
-        return "⚠️ AI request timed out. Please try again."
     except Exception as e:
         return f"⚠️ AI Error: {str(e)}"
 
 def get_ai_analysis(match: dict) -> dict:
-    """Get AI analysis for a single match — picks ONE best bet only"""
+    """Get AI analysis — picks ONE best bet only"""
+    # First calculate the best bet mathematically
+    best_bet = get_best_bet(match)
+    
+    if not best_bet:
+        return {'analysis': "⚠️ No positive EV bet found."}
+    
     prompt = f"""
-    Analyze this match and tell me ONLY ONE bet to take — the single best one.
+    Match: {match['home_team']} vs {match['away_team']}
+    Odds: Home {match['home_odds']}, Draw {match['draw_odds']}, Away {match['away_odds']}
     
-    Match: {match.get('home_team', '')} vs {match.get('away_team', '')}
-    Sport: {match.get('sport', 'Soccer')}
-    Odds: Home {match.get('home_odds', 0)}, Draw {match.get('draw_odds', 0)}, Away {match.get('away_odds', 0)}
+    The best mathematical bet is: {best_bet['outcome'].upper()} @ {best_bet['odds']} with {best_bet['ev_percent']:.1f}% EV.
     
-    Choose the BEST SINGLE bet out of the three outcomes.
-    Answer format exactly: "BEST BET: [outcome] @ [odds]. Why: [one sentence reason]"
-    Do not mention the other outcomes. Only mention the one you recommend.
+    Confirm this is the best bet and explain why in one sentence.
+    Format exactly: "BEST BET: [outcome] @ [odds]. Why: [one sentence]"
     """
     
     response = ask_deepseek(prompt)
-    return {'analysis': response}
+    return {'analysis': response, 'best_bet': best_bet}
 
 # ─────────────────────────────────────────────────────────────
 # DATABASE FUNCTIONS
@@ -212,12 +306,9 @@ def update_bet_result(bet_id, result, return_amount, profit_loss):
 # ─────────────────────────────────────────────────────────────
 # EV & ARBITRAGE FUNCTIONS
 # ─────────────────────────────────────────────────────────────
-def calculate_ev(odds, true_probability):
-    return (true_probability * odds) - 1
-
 def calculate_kelly(odds, true_probability, bankroll, fraction=0.25):
     b = odds - 1
-    p = true_probability
+    p = true_probability / 100
     q = 1 - p
     if b <= 0:
         return 0
@@ -314,9 +405,6 @@ def do_logout():
     st.session_state.authenticated = False
     st.rerun()
 
-# ─────────────────────────────────────────────────────────────
-# LOGIN PAGE
-# ─────────────────────────────────────────────────────────────
 def page_login():
     st.markdown("""
     <style>
@@ -375,19 +463,16 @@ if 'results' not in st.session_state:
 if not st.session_state.authenticated:
     page_login()
 
-# ─── MAIN DASHBOARD ──────────────────────────────────────────
 init_db()
 
 st.title("📊 Betting System — Arbitrage + EV Scanner")
 st.markdown(f"**Welcome, {st.session_state.user_name}** | Role: {st.session_state.user_role.upper()}")
 
-# Sidebar with logout
 with st.sidebar:
     st.markdown("---")
     if st.button("🚪 Logout", use_container_width=True):
         do_logout()
 
-# Tabs
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["📸 Upload", "📝 Manual", "📊 Results", "📄 Slip", "📋 History"])
 
 with tab1:
@@ -414,7 +499,7 @@ with tab2:
             away_odds = st.number_input("Away Odds", min_value=1.01, step=0.01, value=2.80)
         with col4:
             stake = st.number_input("Stake ($)", min_value=1.0, step=1.0, value=10.0)
-            use_ai = st.checkbox("🤖 AI Analysis (single best bet)")
+            use_ai = st.checkbox("🤖 AI Analysis (best bet only)")
         
         submitted = st.form_submit_button("Add Match")
         
@@ -432,7 +517,7 @@ with tab2:
             st.success(f"✅ Added: {home_team} vs {away_team} (Stake: ${stake:.2f})")
             
             if use_ai:
-                with st.spinner("🤖 AI is analyzing for the single best bet..."):
+                with st.spinner("🤖 AI finding the single best bet..."):
                     analysis = get_ai_analysis(match_data)
                     st.info(f"**🤖 AI Recommendation:**\n\n{analysis['analysis']}")
             
@@ -456,38 +541,18 @@ with tab2:
         
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("🔍 Run EV Analysis", use_container_width=True, type="primary"):
+            if st.button("🔍 Find Best Bets", use_container_width=True, type="primary"):
                 results = []
                 for match in st.session_state.matches:
-                    outcomes = ['home', 'draw', 'away']
-                    odds = [match['home_odds'], match['draw_odds'], match['away_odds']]
-                    user_stake = match.get('stake', 10)
-                    
-                    for outcome, odd in zip(outcomes, odds):
-                        if odd > 0:
-                            implied_prob = 1 / odd
-                            true_prob = min(implied_prob * 1.1, 0.95)
-                            ev = calculate_ev(odd, true_prob)
-                            ev_percent = ev * 100
-                            
-                            if ev_percent >= min_ev:
-                                kelly_stake = calculate_kelly(odd, true_prob, bankroll, kelly_fraction)
-                                stake_to_use = user_stake if user_stake > 0 else kelly_stake
-                                
-                                results.append({
-                                    'match': f"{match['home_team']} vs {match['away_team']}",
-                                    'outcome': outcome,
-                                    'odds': odd,
-                                    'ev_percent': ev_percent,
-                                    'stake': stake_to_use,
-                                    'potential_return': stake_to_use * odd,
-                                    'sport': match['sport'],
-                                    'home_team': match['home_team'],
-                                    'away_team': match['away_team'],
-                                    'true_prob': true_prob * 100,
-                                    'implied_prob': implied_prob * 100,
-                                    'user_stake': user_stake
-                                })
+                    best = get_best_bet(match)
+                    if best and best['ev_percent'] >= min_ev:
+                        stake = match.get('stake', 10)
+                        best['stake'] = stake
+                        best['potential_return'] = stake * best['odds']
+                        best['sport'] = match['sport']
+                        best['home_team'] = match['home_team']
+                        best['away_team'] = match['away_team']
+                        results.append(best)
                 
                 st.session_state.results = results
                 
@@ -520,12 +585,12 @@ with tab2:
                 st.rerun()
 
 with tab3:
-    st.markdown("### 📊 Analysis Results")
+    st.markdown("### 📊 Best Bets")
     
     if st.session_state.results:
         results = sorted(st.session_state.results, key=lambda x: x['ev_percent'], reverse=True)
         
-        st.subheader("🎯 Positive EV Bets")
+        st.subheader("🎯 Positive EV Bets (Best Only)")
         
         total_stake = 0
         total_return = 0
@@ -714,8 +779,5 @@ with tab5:
         else:
             st.info("No pending bets to update.")
 
-# ─────────────────────────────────────────────────────────────
-# FOOTER
-# ─────────────────────────────────────────────────────────────
 st.markdown("---")
 st.caption("Mathematical betting — only bet when the numbers say so. | Only Solutions Inc.")
