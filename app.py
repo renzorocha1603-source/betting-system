@@ -299,20 +299,17 @@ class CryptoArbitrageScanner:
     def scan_crypto_arbitrage(self, min_profit=0.5):
         opportunities = []
         
-        # Get BTC prices from multiple exchanges
         prices = {
             "binance": self.get_price_binance("BTCUSDT"),
             "coinbase": self.get_price_coinbase("BTC-USD"),
             "kraken": self.get_price_kraken("XBTUSD"),
         }
         
-        # Filter out None values
         valid_prices = {k: v for k, v in prices.items() if v is not None}
         
         if len(valid_prices) < 2:
             return opportunities
         
-        # Find arbitrage opportunities
         for exchange1, price1 in valid_prices.items():
             for exchange2, price2 in valid_prices.items():
                 if exchange1 >= exchange2:
