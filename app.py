@@ -13,17 +13,6 @@ import time
 from PIL import Image
 
 # ─────────────────────────────────────────────────────────────
-# PLOTLY IMPORTS - FIXED
-# ─────────────────────────────────────────────────────────────
-try:
-    import plotly.graph_objects as go
-    import plotly.express as px
-    PLOTLY_AVAILABLE = True
-except ImportError:
-    PLOTLY_AVAILABLE = False
-    st.warning("⚠️ Plotly not installed. Run: pip install plotly")
-
-# ─────────────────────────────────────────────────────────────
 # PAGE CONFIG
 # ─────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -237,87 +226,7 @@ def calculate_true_probability(odds, market_avg):
     return implied * adjustment
 
 # ─────────────────────────────────────────────────────────────
-# VISUALIZATION FUNCTIONS
-# ─────────────────────────────────────────────────────────────
-def create_performance_chart(bets):
-    if not bets or not PLOTLY_AVAILABLE:
-        return None
-    
-    try:
-        df = pd.DataFrame([{
-            'Date': bet[2][:10],
-            'Profit': bet[12] if bet[12] is not None else 0,
-            'Stake': bet[8],
-            'Result': bet[10] if bet[10] != 'Pending' else 'Pending'
-        } for bet in bets])
-        
-        df = df.sort_values('Date')
-        df['Cumulative'] = df['Profit'].cumsum()
-        
-        fig = go.Figure()
-        
-        fig.add_trace(go.Scatter(
-            x=df['Date'],
-            y=df['Cumulative'],
-            mode='lines+markers',
-            name='Cumulative Profit',
-            line=dict(color='#00D4FF', width=3),
-            marker=dict(size=8, color='#00D4FF'),
-            fill='tozeroy',
-            fillcolor='rgba(0,212,255,0.1)'
-        ))
-        
-        fig.update_layout(
-            template='plotly_dark',
-            paper_bgcolor='rgba(13,27,46,0)',
-            plot_bgcolor='rgba(13,27,46,0)',
-            font=dict(color='#B8CCDE'),
-            height=350,
-            margin=dict(l=0, r=0, t=30, b=30),
-            xaxis_title='Date',
-            yaxis_title='Cumulative Profit ($)',
-            hovermode='x unified'
-        )
-        
-        return fig
-    except:
-        return None
-
-def create_ev_distribution_chart(bets):
-    if not bets or not PLOTLY_AVAILABLE:
-        return None
-    
-    try:
-        ev_values = [b[9] for b in bets if b[9] is not None and b[9] > 0]
-        if not ev_values:
-            return None
-        
-        fig = go.Figure()
-        
-        fig.add_trace(go.Histogram(
-            x=ev_values,
-            nbinsx=20,
-            marker=dict(color='#00D4FF', line=dict(color='#0D1B2E', width=1)),
-            opacity=0.8
-        ))
-        
-        fig.update_layout(
-            template='plotly_dark',
-            paper_bgcolor='rgba(13,27,46,0)',
-            plot_bgcolor='rgba(13,27,46,0)',
-            font=dict(color='#B8CCDE'),
-            height=300,
-            margin=dict(l=0, r=0, t=30, b=30),
-            xaxis_title='EV %',
-            yaxis_title='Frequency'
-        )
-        
-        return fig
-    except:
-        return None
-
-# ─────────────────────────────────────────────────────────────
-# LANDING PAGE (PUBLIC)
+# LANDING PAGE (PUBLIC) — FIXED BUTTON
 # ─────────────────────────────────────────────────────────────
 def landing_page():
     st.markdown(f"""
@@ -435,22 +344,6 @@ def landing_page():
             font-weight: 700;
             font-size: 1.2rem;
         }}
-        .cta-button {{
-            background: linear-gradient(135deg, #00D4FF 0%, #0088CC 100%);
-            color: #0D1B2E;
-            padding: 1rem 2.5rem;
-            border-radius: 12px;
-            font-weight: 600;
-            font-size: 1.1rem;
-            border: none;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            width: 100%;
-        }}
-        .cta-button:hover {{
-            transform: scale(1.03);
-            box-shadow: 0 0 30px rgba(0,212,255,0.3);
-        }}
         .features-grid {{
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -563,14 +456,26 @@ def landing_page():
                 <li>No commitment</li>
                 <li>Cancel anytime</li>
             </div>
-            <button class="cta-button" onclick="window.location.href='?page=signup'">
-                Start Free Trial
-            </button>
-            <p style="font-size:0.8rem; color:#4A6E8A; margin-top:1rem;">
-                🆓 7-day free trial · Then $1.99/month
-            </p>
         </div>
         """, unsafe_allow_html=True)
+    
+    # ─── FIXED: STREAMLIT BUTTON ─────────────────────────────
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Use Streamlit's own button instead of HTML onclick
+    if st.button("🚀 Start Free Trial", use_container_width=True, type="primary"):
+        st.switch_page("app.py")  # This reloads with signup
+    
+    # Or use link button to go to signup page
+    st.link_button("🚀 Start Free Trial", "?page=signup", use_container_width=True, type="primary")
+    
+    # ─── END FIX ──────────────────────────────────────────────
+    
+    st.markdown(f"""
+    <div style="text-align:center; color:#1A3050; font-size:0.8rem; padding:2rem 0;">
+        🆓 7-day free trial · Then $1.99/month
+    </div>
+    """, unsafe_allow_html=True)
     
     # Footer
     st.markdown(f"""
@@ -677,29 +582,6 @@ def dashboard():
         col2.metric("✅ Wins", wins, delta=f"{wins-losses:+}")
         col3.metric("📈 Win Rate", f"{win_rate:.1f}%")
         col4.metric("📊 Net Profit", f"${profit:.2f}", delta=f"{profit:+.2f}")
-        
-        # ─── GRAPHS ────────────────────────────────────────────
-        if PLOTLY_AVAILABLE:
-            st.markdown("---")
-            st.markdown("### 📈 Performance Analytics")
-            
-            col_chart1, col_chart2 = st.columns(2)
-            
-            with col_chart1:
-                fig = create_performance_chart(bets)
-                if fig:
-                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-                else:
-                    st.info("No enough data for performance chart")
-            
-            with col_chart2:
-                fig = create_ev_distribution_chart(bets)
-                if fig:
-                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-                else:
-                    st.info("No enough data for EV distribution chart")
-        else:
-            st.info("📊 Install Plotly for interactive charts: `pip install plotly`")
     else:
         st.info("👋 No bets yet. Start scanning for opportunities below!")
     
