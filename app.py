@@ -407,7 +407,7 @@ with tab2:
     st.markdown("### 📝 Manual Odds Input")
     
     with st.form("manual_odds_form"):
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns([1, 1, 1, 0.8])
         with col1:
             sport = st.selectbox("Sport", ["Soccer", "Hockey", "Basketball", "Football", "Baseball", "Tennis"])
             home_team = st.text_input("Home Team")
@@ -417,27 +417,28 @@ with tab2:
         with col3:
             draw_odds = st.number_input("Draw Odds", min_value=1.01, step=0.01, value=3.20)
             away_odds = st.number_input("Away Odds", min_value=1.01, step=0.01, value=2.80)
-        
-        # AI Analysis toggle
-        use_ai = st.checkbox("🤖 Run DeepSeek AI analysis (recommended)")
+        with col4:
+            stake = st.number_input("Stake ($)", min_value=1.0, step=1.0, value=10.0, help="How much you want to bet")
+            use_ai = st.checkbox("🤖 AI Analysis")
         
         submitted = st.form_submit_button("Add Match")
         
         if submitted and home_team and away_team:
-            st.session_state.matches.append({
+            match_data = {
                 'home_team': home_team,
                 'away_team': away_team,
                 'home_odds': home_odds,
                 'draw_odds': draw_odds,
                 'away_odds': away_odds,
-                'sport': sport
-            })
-            st.success(f"✅ Added: {home_team} vs {away_team}")
+                'sport': sport,
+                'stake': stake
+            }
+            st.session_state.matches.append(match_data)
+            st.success(f"✅ Added: {home_team} vs {away_team} (Stake: ${stake:.2f})")
             
-            # Run AI analysis if enabled
             if use_ai:
                 with st.spinner("🤖 AI is analyzing..."):
-                    analysis = get_ai_analysis(st.session_state.matches[-1])
+                    analysis = get_ai_analysis(match_data)
                     st.info(f"**AI Analysis:**\n\n{analysis['analysis']}")
             
             st.rerun()
@@ -445,7 +446,18 @@ with tab2:
     if st.session_state.matches:
         st.markdown("---")
         st.subheader(f"📋 Current Matches ({len(st.session_state.matches)})")
-        st.dataframe(pd.DataFrame(st.session_state.matches))
+        
+        display_data = []
+        for m in st.session_state.matches:
+            display_data.append({
+                'Home': m['home_team'],
+                'Away': m['away_team'],
+                'Home Odds': m['home_odds'],
+                'Draw Odds': m['draw_odds'],
+                'Away Odds': m['away_odds'],
+                'Stake': f"${m.get('stake', 10):.2f}"
+            })
+        st.dataframe(pd.DataFrame(display_data), use_container_width=True)
         
         col1, col2 = st.columns(2)
         with col1:
@@ -454,6 +466,7 @@ with tab2:
                 for match in st.session_state.matches:
                     outcomes = ['home', 'draw', 'away']
                     odds = [match['home_odds'], match['draw_odds'], match['away_odds']]
+                    user_stake = match.get('stake', 10)
                     
                     for outcome, odd in zip(outcomes, odds):
                         if odd > 0:
@@ -463,19 +476,22 @@ with tab2:
                             ev_percent = ev * 100
                             
                             if ev_percent >= min_ev:
-                                stake = calculate_kelly(odd, true_prob, bankroll, kelly_fraction)
+                                kelly_stake = calculate_kelly(odd, true_prob, bankroll, kelly_fraction)
+                                stake_to_use = user_stake if user_stake > 0 else kelly_stake
+                                
                                 results.append({
                                     'match': f"{match['home_team']} vs {match['away_team']}",
                                     'outcome': outcome,
                                     'odds': odd,
                                     'ev_percent': ev_percent,
-                                    'stake': stake,
-                                    'potential_return': stake * odd,
+                                    'stake': stake_to_use,
+                                    'potential_return': stake_to_use * odd,
                                     'sport': match['sport'],
                                     'home_team': match['home_team'],
                                     'away_team': match['away_team'],
                                     'true_prob': true_prob * 100,
-                                    'implied_prob': implied_prob * 100
+                                    'implied_prob': implied_prob * 100,
+                                    'user_stake': user_stake
                                 })
                 
                 st.session_state.results = results
@@ -516,19 +532,26 @@ with tab3:
         
         st.subheader("🎯 Positive EV Bets")
         
+        total_stake = 0
+        total_return = 0
+        
         for i, bet in enumerate(results, 1):
             st.markdown(f"**{i}. {bet['match']}**")
             col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 1.2])
             col1.write(f"**{bet['outcome'].upper()}** @ {bet['odds']}")
             col2.write(f"EV: {bet['ev_percent']:.1f}%")
             col3.write(f"Stake: ${bet['stake']:.2f}")
+            col4.write(f"Return: ${bet['potential_return']:.2f}")
             
             if bet['ev_percent'] >= 15:
-                col4.success("✅ Strong")
+                col5.success("✅ Strong")
             elif bet['ev_percent'] >= 10:
-                col4.info("🔵 Good")
+                col5.info("🔵 Good")
             else:
-                col4.warning("🟡 Consider")
+                col5.warning("🟡 Consider")
+            
+            total_stake += bet['stake']
+            total_return += bet['potential_return']
             
             if st.button("🤖 AI Analysis", key=f"ai_{i}"):
                 with st.spinner("🤖 Thinking..."):
@@ -545,14 +568,11 @@ with tab3:
             
             st.markdown("---")
         
-        total_stake = sum(b['stake'] for b in results)
-        expected_return = sum(b['potential_return'] for b in results)
-        
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Total Bets", len(results))
         col2.metric("Total Stake", f"${total_stake:.2f}")
-        col3.metric("Expected Return", f"${expected_return:.2f}")
-        col4.metric("Expected Profit", f"${expected_return - total_stake:.2f}")
+        col3.metric("Expected Return", f"${total_return:.2f}")
+        col4.metric("Expected Profit", f"${total_return - total_stake:.2f}")
     else:
         st.info("No results yet. Add matches and run analysis.")
 
