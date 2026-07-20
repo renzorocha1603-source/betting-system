@@ -36,6 +36,16 @@ DOMAIN = "onlysolutions.ca"
 YEAR = datetime.now().year
 
 # ─────────────────────────────────────────────────────────────
+# THEME TOGGLE
+# ─────────────────────────────────────────────────────────────
+if 'theme' not in st.session_state:
+    st.session_state.theme = "dark"
+
+def toggle_theme():
+    st.session_state.theme = "light" if st.session_state.theme == "dark" else "dark"
+    st.rerun()
+
+# ─────────────────────────────────────────────────────────────
 # DATABASE — Users
 # ─────────────────────────────────────────────────────────────
 def init_db():
@@ -180,7 +190,7 @@ def get_bet_summary(bets):
     }
 
 # ─────────────────────────────────────────────────────────────
-# EV FUNCTIONS
+# EV FUNCTIONS — FIXED EV CALCULATION
 # ─────────────────────────────────────────────────────────────
 def get_market_average(odds_list):
     valid = [o for o in odds_list if o > 0]
@@ -190,498 +200,19 @@ def get_market_average(odds_list):
 
 def calculate_true_probability(odds, market_avg):
     implied = 1 / odds
-    adjustment = 1 - (market_avg - 1) * 0.1
+    # More realistic adjustment based on market average
+    adjustment = 1 - (market_avg - 1) * 0.05
     return implied * adjustment
 
 def calculate_ev(odds, true_prob):
     return (true_prob * odds) - 1
 
-# ─────────────────────────────────────────────────────────────
-# CYBER CSS — BRIGHTER TEXT, BETTER CONTRAST
-# ─────────────────────────────────────────────────────────────
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&family=Orbitron:wght@400;500;600;700;800;900&display=swap');
-
-* { margin: 0; padding: 0; box-sizing: border-box; }
-
-:root {
-    --bg-deep: #0B0E14;
-    --bg-surface: #111927;
-    --bg-card: rgba(20, 30, 50, 0.6);
-    --border-glass: rgba(255, 255, 255, 0.08);
-    --text-primary: #F0F4FF;
-    --text-secondary: #B0C4DE;
-    --text-muted: #6A8CAE;
-    --cyan: #00F3FF;
-    --cyan-glow: rgba(0, 243, 255, 0.3);
-    --lime: #39FF14;
-    --lime-glow: rgba(57, 255, 20, 0.25);
-    --orange: #FF6B35;
-    --purple: #7C3AED;
-    --red: #FF3355;
-    --card-radius: 16px;
-    --font-mono: 'JetBrains Mono', monospace;
-    --font-display: 'Orbitron', sans-serif;
-}
-
-html, body, .stApp, .stApp > div, .main, .block-container,
-div[data-testid="stAppViewContainer"],
-div[data-testid="stHeader"],
-section[data-testid="stSidebar"] {
-    background: var(--bg-deep) !important;
-    background-color: var(--bg-deep) !important;
-    color: var(--text-primary) !important;
-}
-
-.block-container {
-    padding: 1.5rem 2rem 3rem !important;
-    max-width: 1400px !important;
-}
-
-/* ALL TEXT — MAKING IT BRIGHTER */
-.stMarkdown, .stText, .stCaption, p, div, span, label, h1, h2, h3, h4, h5, h6 {
-    color: var(--text-primary) !important;
-}
-
-.stMarkdown p, .stMarkdown li, .stMarkdown div {
-    color: var(--text-secondary) !important;
-}
-
-.stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
-    color: var(--text-primary) !important;
-}
-
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: var(--bg-deep); }
-::-webkit-scrollbar-thumb { background: var(--cyan); border-radius: 2px; }
-
-/* Top Nav */
-.terminal-nav {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.8rem 1.5rem;
-    background: var(--bg-surface);
-    border: 1px solid var(--border-glass);
-    border-radius: var(--card-radius);
-    margin-bottom: 1.5rem;
-    backdrop-filter: blur(20px);
-    position: relative;
-    overflow: hidden;
-}
-.terminal-nav::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, var(--cyan), var(--lime), transparent);
-    animation: scanline 4s ease-in-out infinite;
-}
-@keyframes scanline {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
-}
-.terminal-logo .brand {
-    font-family: var(--font-display);
-    font-size: 1.1rem;
-    font-weight: 700;
-    background: linear-gradient(135deg, var(--cyan), var(--lime));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    letter-spacing: 0.12em;
-}
-.terminal-logo .sub {
-    font-family: var(--font-mono);
-    font-size: 0.55rem;
-    color: var(--text-muted);
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-}
-.terminal-status {
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-}
-.terminal-status .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--lime);
-    box-shadow: 0 0 20px var(--lime-glow);
-    animation: pulse-dot 2s ease-in-out infinite;
-}
-@keyframes pulse-dot {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.5; transform: scale(0.8); }
-}
-.terminal-status .live-text { color: var(--lime); font-weight: 600; }
-.terminal-status .stats { color: var(--text-muted); }
-.terminal-status .stats span { color: var(--text-secondary); font-weight: 600; }
-.terminal-status .user-badge {
-    background: rgba(0,243,255,0.1);
-    border: 1px solid rgba(0,243,255,0.15);
-    border-radius: 20px;
-    padding: 0.2rem 0.8rem;
-    color: var(--cyan);
-    font-size: 0.6rem;
-    font-weight: 600;
-}
-
-/* KPI Grid — LIGHTER CARDS */
-.kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-}
-.kpi-card {
-    background: rgba(20, 30, 50, 0.7);
-    backdrop-filter: blur(20px);
-    border: 1px solid var(--border-glass);
-    border-radius: var(--card-radius);
-    padding: 1.2rem 1.5rem;
-    transition: all 0.3s ease;
-}
-.kpi-card:hover {
-    border-color: var(--cyan);
-    transform: translateY(-2px);
-}
-.kpi-card .label {
-    font-family: var(--font-mono);
-    font-size: 0.55rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    margin-bottom: 0.3rem;
-}
-.kpi-card .value {
-    font-family: var(--font-display);
-    font-size: 1.6rem;
-    font-weight: 700;
-    color: var(--text-primary);
-}
-.kpi-card .value.cyan { color: var(--cyan); text-shadow: 0 0 30px var(--cyan-glow); }
-.kpi-card .value.lime { color: var(--lime); text-shadow: 0 0 30px var(--lime-glow); }
-.kpi-card .value.orange { color: var(--orange); }
-.kpi-card .value.purple { color: var(--purple); }
-.kpi-card .change { font-family: var(--font-mono); font-size: 0.6rem; margin-top: 0.25rem; }
-.kpi-card .change.positive { color: var(--lime); }
-.kpi-card .change.negative { color: var(--red); }
-
-/* Arb Card — LIGHTER */
-.arb-card {
-    background: rgba(20, 30, 50, 0.7);
-    backdrop-filter: blur(20px);
-    border: 1px solid var(--border-glass);
-    border-radius: var(--card-radius);
-    padding: 1.25rem 1.5rem;
-    margin-bottom: 0.75rem;
-    transition: all 0.3s ease;
-}
-.arb-card:hover {
-    border-color: var(--cyan);
-}
-.arb-card .arb-match .teams {
-    font-family: 'Inter', sans-serif;
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-.arb-card .arb-match .teams .vs { color: var(--text-muted); }
-.arb-card .arb-match .meta {
-    font-family: var(--font-mono);
-    font-size: 0.6rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
-}
-.arb-card .arb-badge {
-    font-family: var(--font-display);
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: var(--lime);
-    background: rgba(57,255,20,0.1);
-    border: 1px solid rgba(57,255,20,0.15);
-    padding: 0.3rem 0.8rem;
-    border-radius: 20px;
-}
-.arb-card .odd-cell {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 0.3rem 0.8rem;
-    background: rgba(0,0,0,0.3);
-    border-radius: 8px;
-    min-width: 60px;
-}
-.arb-card .odd-cell .odd-label {
-    font-family: var(--font-mono);
-    font-size: 0.5rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
-}
-.arb-card .odd-cell .odd-value {
-    font-family: var(--font-mono);
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-}
-.arb-card .odd-cell .odd-value.highlight {
-    color: var(--cyan);
-    text-shadow: 0 0 20px var(--cyan-glow);
-}
-.arb-card .arb-actions .action-btn {
-    background: rgba(0,243,255,0.08);
-    border: 1px solid rgba(0,243,255,0.12);
-    color: var(--cyan);
-    padding: 0.3rem 0.8rem;
-    border-radius: 6px;
-    font-family: var(--font-mono);
-    font-size: 0.6rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    text-transform: uppercase;
-}
-.arb-card .arb-actions .action-btn:hover {
-    background: rgba(0,243,255,0.15);
-    border-color: var(--cyan);
-}
-.arb-card .arb-actions .action-btn.primary {
-    background: linear-gradient(135deg, var(--cyan), #0099CC);
-    color: #0B0E14;
-    border: none;
-}
-.arb-card .arb-actions .action-btn.primary:hover {
-    box-shadow: 0 0 30px var(--cyan-glow);
-}
-
-/* Hero Section */
-.hero-section {
-    text-align: center;
-    padding: 3rem 2rem;
-    background: var(--bg-surface);
-    border: 1px solid var(--border-glass);
-    border-radius: var(--card-radius);
-    margin-bottom: 2rem;
-}
-.hero-section h1 {
-    font-family: var(--font-display);
-    font-size: 2.8rem;
-    font-weight: 800;
-    background: linear-gradient(135deg, var(--cyan), var(--lime));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-.hero-section p {
-    color: var(--text-secondary) !important;
-    font-size: 1.1rem;
-}
-.hero-section .badge {
-    background: rgba(0,243,255,0.1);
-    border: 1px solid rgba(0,243,255,0.15);
-    padding: 0.3rem 1rem;
-    border-radius: 20px;
-    color: var(--cyan);
-    font-size: 0.7rem;
-}
-.hero-section .badge-live {
-    background: rgba(57,255,20,0.08);
-    border: 1px solid rgba(57,255,20,0.12);
-    padding: 0.3rem 1rem;
-    border-radius: 20px;
-    color: var(--lime);
-    font-size: 0.7rem;
-}
-
-/* Feature Cards */
-.feature-card {
-    background: rgba(20, 30, 50, 0.7);
-    backdrop-filter: blur(20px);
-    border: 1px solid var(--border-glass);
-    border-radius: var(--card-radius);
-    padding: 1.5rem;
-    text-align: center;
-}
-.feature-card .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
-.feature-card h3 { color: var(--text-primary); font-size: 1rem; }
-.feature-card p { color: var(--text-muted); font-size: 0.8rem; }
-
-/* Pricing Card */
-.pricing-card {
-    background: rgba(20, 30, 50, 0.7);
-    backdrop-filter: blur(20px);
-    border: 1px solid var(--border-glass);
-    border-radius: var(--card-radius);
-    padding: 2rem;
-    text-align: center;
-}
-.pricing-card .badge-top {
-    background: linear-gradient(135deg, var(--cyan), var(--lime));
-    color: #0B0E14;
-    padding: 0.3rem 1rem;
-    border-radius: 20px;
-    font-size: 0.7rem;
-    font-weight: 700;
-    display: inline-block;
-    margin-bottom: 0.5rem;
-}
-.pricing-card .price {
-    font-family: var(--font-display);
-    font-size: 3.5rem;
-    font-weight: 700;
-    color: var(--cyan);
-}
-.pricing-card .period { color: var(--text-muted); font-size: 0.8rem; }
-.pricing-card .feature-item {
-    padding: 0.4rem 0;
-    color: var(--text-secondary);
-}
-.pricing-card .feature-item::before { content: "✓ "; color: var(--lime); }
-
-/* Form elements — BRIGHTER */
-div[data-testid="stTextInput"] input {
-    background: rgba(0, 0, 0, 0.3) !important;
-    border: 1px solid var(--border-glass) !important;
-    border-radius: 8px !important;
-    color: var(--text-primary) !important;
-    padding: 0.6rem 1rem !important;
-}
-div[data-testid="stTextInput"] input:focus {
-    border-color: var(--cyan) !important;
-    box-shadow: 0 0 20px var(--cyan-glow) !important;
-}
-div[data-testid="stTextInput"] label {
-    color: var(--text-secondary) !important;
-    font-family: var(--font-mono) !important;
-    font-size: 0.6rem !important;
-}
-
-/* Buttons */
-.stButton button, div[data-testid="stFormSubmitButton"] button {
-    background: linear-gradient(135deg, var(--cyan), #0099CC) !important;
-    color: #0B0E14 !important;
-    border: none !important;
-    border-radius: 8px !important;
-    font-family: var(--font-mono) !important;
-    font-weight: 700 !important;
-    font-size: 0.7rem !important;
-    letter-spacing: 0.08em !important;
-    text-transform: uppercase !important;
-    padding: 0.6rem 1.5rem !important;
-    box-shadow: 0 0 20px var(--cyan-glow) !important;
-}
-.stButton button:hover, div[data-testid="stFormSubmitButton"] button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 0 40px var(--cyan-glow) !important;
-}
-
-/* Metrics */
-div[data-testid="metric-container"] {
-    background: rgba(20, 30, 50, 0.7) !important;
-    border: 1px solid var(--border-glass) !important;
-    border-radius: var(--card-radius) !important;
-    padding: 0.8rem 1rem !important;
-}
-div[data-testid="metric-label"] {
-    color: var(--text-muted) !important;
-    font-family: var(--font-mono) !important;
-    font-size: 0.5rem !important;
-    text-transform: uppercase !important;
-}
-div[data-testid="metric-value"] {
-    color: var(--text-primary) !important;
-    font-family: var(--font-display) !important;
-    font-size: 1.2rem !important;
-    font-weight: 700 !important;
-}
-
-/* Sidebar */
-section[data-testid="stSidebar"] {
-    background: var(--bg-surface) !important;
-    border-right: 1px solid var(--border-glass) !important;
-}
-section[data-testid="stSidebar"] .stMarkdown {
-    color: var(--text-secondary) !important;
-}
-
-/* Tabs */
-.stTabs [data-baseweb="tab-list"] {
-    gap: 0 !important;
-    border-bottom: 1px solid var(--border-glass) !important;
-}
-.stTabs [data-baseweb="tab"] {
-    font-family: var(--font-mono) !important;
-    font-size: 0.6rem !important;
-    color: var(--text-muted) !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.08em !important;
-    padding: 0.5rem 1.5rem !important;
-}
-.stTabs [data-baseweb="tab"][aria-selected="true"] {
-    color: var(--cyan) !important;
-    border-bottom: 2px solid var(--cyan) !important;
-}
-
-/* Select */
-.stSelectbox > div > div {
-    background: rgba(0, 0, 0, 0.3) !important;
-    border: 1px solid var(--border-glass) !important;
-    border-radius: 8px !important;
-    color: var(--text-primary) !important;
-}
-.stSelectbox label {
-    color: var(--text-secondary) !important;
-}
-
-/* Slider */
-.stSlider div[data-baseweb="slider"] {
-    background: var(--border-glass) !important;
-}
-.stSlider div[data-baseweb="slider"] div {
-    background: var(--cyan) !important;
-    box-shadow: 0 0 15px var(--cyan-glow) !important;
-}
-
-/* Alerts */
-.stAlert {
-    background: rgba(20, 30, 50, 0.8) !important;
-    border: 1px solid var(--border-glass) !important;
-    border-radius: var(--card-radius) !important;
-}
-.stAlert .stMarkdown {
-    color: var(--text-secondary) !important;
-}
-
-/* Hide Streamlit branding */
-#MainMenu, footer, header { visibility: hidden !important; display: none !important; }
-
-/* Expander */
-details {
-    background: rgba(20, 30, 50, 0.7) !important;
-    border: 1px solid var(--border-glass) !important;
-    border-radius: 8px !important;
-    padding: 0.5rem !important;
-}
-details summary {
-    color: var(--text-secondary) !important;
-    font-family: var(--font-mono) !important;
-    font-size: 0.65rem !important;
-    cursor: pointer !important;
-}
-details summary:hover { color: var(--cyan) !important; }
-
-/* Info/Warning/Success/Error */
-.stInfo { border-left: 3px solid var(--cyan) !important; }
-.stSuccess { border-left: 3px solid var(--lime) !important; }
-.stWarning { border-left: 3px solid var(--orange) !important; }
-.stError { border-left: 3px solid var(--red) !important; }
-</style>
-""", unsafe_allow_html=True)
+def calculate_real_ev(odds, market_avg):
+    """Calculate realistic EV without artificial cap"""
+    implied = 1 / odds
+    true_prob = implied * (1 + 0.02)  # Small 2% edge assumption
+    ev = (true_prob * odds) - 1
+    return ev * 100  # Return as percentage
 
 # ─────────────────────────────────────────────────────────────
 # LANGUAGES
@@ -746,8 +277,21 @@ LANGUAGES = {
         "download_slip": "📥 Download Slip",
         "no_bets": "No bets yet. Start scanning for opportunities!",
         "no_pending": "No pending bets.",
-        "no_pending_slips": "No pending bets available. Scan for opportunities first!",
-        "bet_added": "✅ Bet added: {home} vs {away} — {outcome} @ {odds}"
+        "no_pending_slips": "No pending bets available.",
+        "bet_added": "✅ Bet added: {home} vs {away} — {outcome} @ {odds}",
+        "faq_title": "❓ Frequently Asked Questions",
+        "faq_q1": "What is Expected Value (EV)?",
+        "faq_a1": "EV is the average amount you win per bet over time. Positive EV means you'll make money over many bets.",
+        "faq_q2": "How does arbitrage work?",
+        "faq_a2": "Arbitrage is betting on all outcomes across different bookmakers to guarantee a profit regardless of the result.",
+        "faq_q3": "What is the Kelly Criterion?",
+        "faq_a3": "The Kelly Criterion is a formula that tells you the optimal bet size based on your bankroll and the edge you have.",
+        "faq_q4": "How much should I bet?",
+        "faq_a4": "Never bet more than 1-5% of your bankroll per bet. The app uses Kelly Criterion to suggest optimal stakes.",
+        "faq_q5": "Is this guaranteed to make money?",
+        "faq_a5": "EV betting is mathematically proven to be profitable over time, but individual bets can lose. Always bet responsibly.",
+        "theme_dark": "🌙 Dark",
+        "theme_light": "☀️ Light"
     },
     "fr": {
         "title": "⚡ Terminal de Paris Cyber",
@@ -772,7 +316,7 @@ LANGUAGES = {
         "signup_error": "Tous les champs sont requis.",
         "password_mismatch": "Les mots de passe ne correspondent pas.",
         "password_short": "Le mot de passe doit contenir au moins 6 caractères.",
-        "account_created": "✅ Compte créé! Vous pouvez maintenant vous connecter.",
+        "account_created": "✅ Compte créé!",
         "email_exists": "Courriel déjà enregistré.",
         "login_error": "Courriel ou mot de passe incorrect.",
         "footer": f"{COMPANY_NAME} · {DOMAIN} · {YEAR}",
@@ -809,7 +353,20 @@ LANGUAGES = {
         "no_bets": "Aucun pari pour l'instant.",
         "no_pending": "Aucun pari en attente.",
         "no_pending_slips": "Aucun pari en attente.",
-        "bet_added": "✅ Pari ajouté: {home} vs {away} — {outcome} @ {odds}"
+        "bet_added": "✅ Pari ajouté: {home} vs {away} — {outcome} @ {odds}",
+        "faq_title": "❓ Questions Fréquentes",
+        "faq_q1": "Qu'est-ce que la Valeur Attendue (EV)?",
+        "faq_a1": "L'EV est le montant moyen que vous gagnez par pari au fil du temps. Un EV positif signifie que vous gagnerez de l'argent sur plusieurs paris.",
+        "faq_q2": "Comment fonctionne l'arbitrage?",
+        "faq_a2": "L'arbitrage consiste à parier sur tous les résultats chez différents bookmakers pour garantir un profit.",
+        "faq_q3": "Qu'est-ce que le critère de Kelly?",
+        "faq_a3": "Le critère de Kelly est une formule qui vous indique la taille de mise optimale.",
+        "faq_q4": "Combien dois-je parier?",
+        "faq_a4": "Ne pariez jamais plus de 1-5% de votre bankroll par pari.",
+        "faq_q5": "Est-ce garanti de gagner de l'argent?",
+        "faq_a5": "Les paris EV sont mathématiquement rentables à long terme, mais les paris individuels peuvent perdre.",
+        "theme_dark": "🌙 Sombre",
+        "theme_light": "☀️ Clair"
     },
     "es": {
         "title": "⚡ Terminal de Apuestas Cyber",
@@ -871,9 +428,513 @@ LANGUAGES = {
         "no_bets": "Aún no hay apuestas.",
         "no_pending": "No hay apuestas pendientes.",
         "no_pending_slips": "No hay apuestas pendientes.",
-        "bet_added": "✅ Apuesta agregada: {home} vs {away} — {outcome} @ {odds}"
+        "bet_added": "✅ Apuesta agregada: {home} vs {away} — {outcome} @ {odds}",
+        "faq_title": "❓ Preguntas Frecuentes",
+        "faq_q1": "¿Qué es el Valor Esperado (EV)?",
+        "faq_a1": "El EV es la cantidad promedio que ganas por apuesta. EV positivo significa que ganarás dinero con el tiempo.",
+        "faq_q2": "¿Cómo funciona el arbitraje?",
+        "faq_a2": "El arbitraje es apostar en todos los resultados en diferentes casas de apuestas para garantizar un beneficio.",
+        "faq_q3": "¿Qué es el criterio de Kelly?",
+        "faq_a3": "El criterio de Kelly es una fórmula que te dice el tamaño óptimo de la apuesta.",
+        "faq_q4": "¿Cuánto debo apostar?",
+        "faq_a4": "Nunca apuestes más del 1-5% de tu bankroll por apuesta.",
+        "faq_q5": "¿Es garantizado ganar dinero?",
+        "faq_a5": "Las apuestas EV son matemáticamente rentables a largo plazo, pero las apuestas individuales pueden perder.",
+        "theme_dark": "🌙 Oscuro",
+        "theme_light": "☀️ Claro"
     }
 }
+
+# ─────────────────────────────────────────────────────────────
+# CYBER CSS — BRIGHT TEXT + THEME SUPPORT
+# ─────────────────────────────────────────────────────────────
+def get_theme_css():
+    is_dark = st.session_state.theme == "dark"
+    
+    bg_deep = "#0B0E14" if is_dark else "#F0F4FF"
+    bg_surface = "#111927" if is_dark else "#E8EDF5"
+    bg_card = "rgba(20, 30, 50, 0.7)" if is_dark else "rgba(200, 215, 240, 0.7)"
+    border = "rgba(255, 255, 255, 0.08)" if is_dark else "rgba(0, 0, 0, 0.08)"
+    text_primary = "#F0F4FF" if is_dark else "#0B0E14"
+    text_secondary = "#B0C4DE" if is_dark else "#2A3A50"
+    text_muted = "#6A8CAE" if is_dark else "#5A6A80"
+    
+    return f"""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&family=Orbitron:wght@400;500;600;700;800;900&display=swap');
+    
+    * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+    
+    :root {{
+        --bg-deep: {bg_deep};
+        --bg-surface: {bg_surface};
+        --bg-card: {bg_card};
+        --border-glass: {border};
+        --text-primary: {text_primary};
+        --text-secondary: {text_secondary};
+        --text-muted: {text_muted};
+        --cyan: #00F3FF;
+        --cyan-glow: rgba(0, 243, 255, 0.3);
+        --lime: #39FF14;
+        --lime-glow: rgba(57, 255, 20, 0.25);
+        --orange: #FF6B35;
+        --purple: #7C3AED;
+        --red: #FF3355;
+        --card-radius: 16px;
+        --font-mono: 'JetBrains Mono', monospace;
+        --font-display: 'Orbitron', sans-serif;
+    }}
+    
+    html, body, .stApp, .stApp > div, .main, .block-container,
+    div[data-testid="stAppViewContainer"],
+    div[data-testid="stHeader"],
+    section[data-testid="stSidebar"] {{
+        background: var(--bg-deep) !important;
+        background-color: var(--bg-deep) !important;
+        color: var(--text-primary) !important;
+    }}
+    
+    .block-container {{
+        padding: 1.5rem 2rem 3rem !important;
+        max-width: 1400px !important;
+    }}
+    
+    /* ALL TEXT — BRIGHT AND VISIBLE */
+    .stMarkdown, .stText, .stCaption, p, div, span, label, h1, h2, h3, h4, h5, h6 {{
+        color: var(--text-primary) !important;
+    }}
+    
+    .stMarkdown p, .stMarkdown li, .stMarkdown div {{
+        color: var(--text-secondary) !important;
+    }}
+    
+    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {{
+        color: var(--text-primary) !important;
+    }}
+    
+    /* ALL LABELS — VISIBLE */
+    label, .stSelectbox label, .stNumberInput label, .stTextInput label {{
+        color: var(--text-secondary) !important;
+        font-size: 0.65rem !important;
+        font-weight: 600 !important;
+    }}
+    
+    /* Mode text etc */
+    .stSelectbox > div > div {{
+        color: var(--text-primary) !important;
+        background: rgba(0,0,0,0.2) !important;
+    }}
+    
+    ::-webkit-scrollbar {{ width: 4px; height: 4px; }}
+    ::-webkit-scrollbar-track {{ background: var(--bg-deep); }}
+    ::-webkit-scrollbar-thumb {{ background: var(--cyan); border-radius: 2px; }}
+    
+    /* Top Nav */
+    .terminal-nav {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.8rem 1.5rem;
+        background: var(--bg-surface);
+        border: 1px solid var(--border-glass);
+        border-radius: var(--card-radius);
+        margin-bottom: 1.5rem;
+        backdrop-filter: blur(20px);
+        position: relative;
+        overflow: hidden;
+    }}
+    .terminal-nav::before {{
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, var(--cyan), var(--lime), transparent);
+        animation: scanline 4s ease-in-out infinite;
+    }}
+    @keyframes scanline {{
+        0% {{ transform: translateX(-100%); }}
+        100% {{ transform: translateX(100%); }}
+    }}
+    .terminal-logo .brand {{
+        font-family: var(--font-display);
+        font-size: 1.1rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, var(--cyan), var(--lime));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        letter-spacing: 0.12em;
+    }}
+    .terminal-logo .sub {{
+        font-family: var(--font-mono);
+        font-size: 0.55rem;
+        color: var(--text-muted);
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+    }}
+    .terminal-status {{
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        font-family: var(--font-mono);
+        font-size: 0.65rem;
+    }}
+    .terminal-status .dot {{
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--lime);
+        box-shadow: 0 0 20px var(--lime-glow);
+        animation: pulse-dot 2s ease-in-out infinite;
+    }}
+    @keyframes pulse-dot {{
+        0%, 100% {{ opacity: 1; transform: scale(1); }}
+        50% {{ opacity: 0.5; transform: scale(0.8); }}
+    }}
+    .terminal-status .live-text {{ color: var(--lime); font-weight: 600; }}
+    .terminal-status .stats {{ color: var(--text-muted); }}
+    .terminal-status .stats span {{ color: var(--text-secondary); font-weight: 600; }}
+    .terminal-status .user-badge {{
+        background: rgba(0,243,255,0.1);
+        border: 1px solid rgba(0,243,255,0.15);
+        border-radius: 20px;
+        padding: 0.2rem 0.8rem;
+        color: var(--cyan);
+        font-size: 0.6rem;
+        font-weight: 600;
+    }}
+    
+    /* KPI Cards */
+    .kpi-grid {{
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }}
+    .kpi-card {{
+        background: var(--bg-card);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--border-glass);
+        border-radius: var(--card-radius);
+        padding: 1.2rem 1.5rem;
+        transition: all 0.3s ease;
+    }}
+    .kpi-card:hover {{
+        border-color: var(--cyan);
+        transform: translateY(-2px);
+    }}
+    .kpi-card .label {{
+        font-family: var(--font-mono);
+        font-size: 0.55rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 0.3rem;
+    }}
+    .kpi-card .value {{
+        font-family: var(--font-display);
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }}
+    .kpi-card .value.cyan {{ color: var(--cyan); text-shadow: 0 0 30px var(--cyan-glow); }}
+    .kpi-card .value.lime {{ color: var(--lime); text-shadow: 0 0 30px var(--lime-glow); }}
+    .kpi-card .value.orange {{ color: var(--orange); }}
+    .kpi-card .value.purple {{ color: var(--purple); }}
+    .kpi-card .change {{ font-family: var(--font-mono); font-size: 0.6rem; margin-top: 0.25rem; }}
+    .kpi-card .change.positive {{ color: var(--lime); }}
+    .kpi-card .change.negative {{ color: var(--red); }}
+    
+    /* Arb Card */
+    .arb-card {{
+        background: var(--bg-card);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--border-glass);
+        border-radius: var(--card-radius);
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 0.75rem;
+        transition: all 0.3s ease;
+    }}
+    .arb-card:hover {{ border-color: var(--cyan); }}
+    .arb-card .arb-match .teams {{
+        font-family: 'Inter', sans-serif;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }}
+    .arb-card .arb-match .teams .vs {{ color: var(--text-muted); }}
+    .arb-card .arb-match .meta {{
+        font-family: var(--font-mono);
+        font-size: 0.6rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+    }}
+    .arb-card .arb-badge {{
+        font-family: var(--font-display);
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: var(--lime);
+        background: rgba(57,255,20,0.1);
+        border: 1px solid rgba(57,255,20,0.15);
+        padding: 0.3rem 0.8rem;
+        border-radius: 20px;
+    }}
+    .arb-card .odd-cell {{
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0.3rem 0.8rem;
+        background: rgba(0,0,0,0.3);
+        border-radius: 8px;
+        min-width: 60px;
+    }}
+    .arb-card .odd-cell .odd-label {{
+        font-family: var(--font-mono);
+        font-size: 0.5rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+    }}
+    .arb-card .odd-cell .odd-value {{
+        font-family: var(--font-mono);
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+    }}
+    .arb-card .odd-cell .odd-value.highlight {{
+        color: var(--cyan);
+        text-shadow: 0 0 20px var(--cyan-glow);
+    }}
+    .arb-card .arb-actions .action-btn {{
+        background: rgba(0,243,255,0.08);
+        border: 1px solid rgba(0,243,255,0.12);
+        color: var(--cyan);
+        padding: 0.3rem 0.8rem;
+        border-radius: 6px;
+        font-family: var(--font-mono);
+        font-size: 0.6rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-transform: uppercase;
+    }}
+    .arb-card .arb-actions .action-btn:hover {{
+        background: rgba(0,243,255,0.15);
+        border-color: var(--cyan);
+    }}
+    .arb-card .arb-actions .action-btn.primary {{
+        background: linear-gradient(135deg, var(--cyan), #0099CC);
+        color: #0B0E14;
+        border: none;
+    }}
+    .arb-card .arb-actions .action-btn.primary:hover {{
+        box-shadow: 0 0 30px var(--cyan-glow);
+    }}
+    
+    /* Hero Section */
+    .hero-section {{
+        text-align: center;
+        padding: 3rem 2rem;
+        background: var(--bg-surface);
+        border: 1px solid var(--border-glass);
+        border-radius: var(--card-radius);
+        margin-bottom: 2rem;
+    }}
+    .hero-section h1 {{
+        font-family: var(--font-display);
+        font-size: 2.8rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, var(--cyan), var(--lime));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }}
+    .hero-section p {{ color: var(--text-secondary) !important; font-size: 1.1rem; }}
+    .hero-section .badge {{
+        background: rgba(0,243,255,0.1);
+        border: 1px solid rgba(0,243,255,0.15);
+        padding: 0.3rem 1rem;
+        border-radius: 20px;
+        color: var(--cyan);
+        font-size: 0.7rem;
+    }}
+    .hero-section .badge-live {{
+        background: rgba(57,255,20,0.08);
+        border: 1px solid rgba(57,255,20,0.12);
+        padding: 0.3rem 1rem;
+        border-radius: 20px;
+        color: var(--lime);
+        font-size: 0.7rem;
+    }}
+    
+    /* Feature Cards */
+    .feature-card {{
+        background: var(--bg-card);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--border-glass);
+        border-radius: var(--card-radius);
+        padding: 1.5rem;
+        text-align: center;
+    }}
+    .feature-card .icon {{ font-size: 2.5rem; margin-bottom: 0.5rem; }}
+    .feature-card h3 {{ color: var(--text-primary); font-size: 1rem; }}
+    .feature-card p {{ color: var(--text-muted); font-size: 0.8rem; }}
+    
+    /* Pricing Card */
+    .pricing-card {{
+        background: var(--bg-card);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--border-glass);
+        border-radius: var(--card-radius);
+        padding: 2rem;
+        text-align: center;
+    }}
+    .pricing-card .badge-top {{
+        background: linear-gradient(135deg, var(--cyan), var(--lime));
+        color: #0B0E14;
+        padding: 0.3rem 1rem;
+        border-radius: 20px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        display: inline-block;
+        margin-bottom: 0.5rem;
+    }}
+    .pricing-card .price {{
+        font-family: var(--font-display);
+        font-size: 3.5rem;
+        font-weight: 700;
+        color: var(--cyan);
+    }}
+    .pricing-card .period {{ color: var(--text-muted); font-size: 0.8rem; }}
+    .pricing-card .feature-item {{
+        padding: 0.4rem 0;
+        color: var(--text-secondary);
+    }}
+    .pricing-card .feature-item::before {{ content: "✓ "; color: var(--lime); }}
+    
+    /* Streamlit Overrides */
+    div[data-testid="stTextInput"] input {{
+        background: rgba(0,0,0,0.2) !important;
+        border: 1px solid var(--border-glass) !important;
+        border-radius: 8px !important;
+        color: var(--text-primary) !important;
+        padding: 0.6rem 1rem !important;
+    }}
+    div[data-testid="stTextInput"] input:focus {{
+        border-color: var(--cyan) !important;
+        box-shadow: 0 0 20px var(--cyan-glow) !important;
+    }}
+    div[data-testid="stTextInput"] label {{
+        color: var(--text-secondary) !important;
+        font-family: var(--font-mono) !important;
+        font-size: 0.6rem !important;
+    }}
+    
+    .stButton button, div[data-testid="stFormSubmitButton"] button {{
+        background: linear-gradient(135deg, var(--cyan), #0099CC) !important;
+        color: #0B0E14 !important;
+        border: none !important;
+        border-radius: 8px !important;
+        font-family: var(--font-mono) !important;
+        font-weight: 700 !important;
+        font-size: 0.7rem !important;
+        letter-spacing: 0.08em !important;
+        text-transform: uppercase !important;
+        padding: 0.6rem 1.5rem !important;
+        box-shadow: 0 0 20px var(--cyan-glow) !important;
+    }}
+    .stButton button:hover, div[data-testid="stFormSubmitButton"] button:hover {{
+        transform: translateY(-2px) !important;
+        box-shadow: 0 0 40px var(--cyan-glow) !important;
+    }}
+    
+    div[data-testid="metric-container"] {{
+        background: var(--bg-card) !important;
+        border: 1px solid var(--border-glass) !important;
+        border-radius: var(--card-radius) !important;
+        padding: 0.8rem 1rem !important;
+    }}
+    div[data-testid="metric-label"] {{
+        color: var(--text-muted) !important;
+        font-family: var(--font-mono) !important;
+        font-size: 0.5rem !important;
+        text-transform: uppercase !important;
+    }}
+    div[data-testid="metric-value"] {{
+        color: var(--text-primary) !important;
+        font-family: var(--font-display) !important;
+        font-size: 1.2rem !important;
+        font-weight: 700 !important;
+    }}
+    
+    section[data-testid="stSidebar"] {{
+        background: var(--bg-surface) !important;
+        border-right: 1px solid var(--border-glass) !important;
+    }}
+    
+    .stTabs [data-baseweb="tab-list"] {{
+        gap: 0 !important;
+        border-bottom: 1px solid var(--border-glass) !important;
+    }}
+    .stTabs [data-baseweb="tab"] {{
+        font-family: var(--font-mono) !important;
+        font-size: 0.6rem !important;
+        color: var(--text-muted) !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.08em !important;
+        padding: 0.5rem 1.5rem !important;
+    }}
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {{
+        color: var(--cyan) !important;
+        border-bottom: 2px solid var(--cyan) !important;
+    }}
+    
+    .stSelectbox > div > div {{
+        background: rgba(0,0,0,0.2) !important;
+        border: 1px solid var(--border-glass) !important;
+        border-radius: 8px !important;
+        color: var(--text-primary) !important;
+    }}
+    .stSelectbox label {{
+        color: var(--text-secondary) !important;
+    }}
+    
+    .stSlider div[data-baseweb="slider"] {{ background: var(--border-glass) !important; }}
+    .stSlider div[data-baseweb="slider"] div {{ background: var(--cyan) !important; box-shadow: 0 0 15px var(--cyan-glow) !important; }}
+    
+    .stAlert {{
+        background: var(--bg-card) !important;
+        border: 1px solid var(--border-glass) !important;
+        border-radius: var(--card-radius) !important;
+    }}
+    .stAlert .stMarkdown {{ color: var(--text-secondary) !important; }}
+    
+    /* FAQ Section */
+    .faq-container {{
+        background: var(--bg-card);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--border-glass);
+        border-radius: var(--card-radius);
+        padding: 1.5rem;
+        margin-bottom: 0.75rem;
+    }}
+    .faq-container .faq-q {{
+        font-family: var(--font-display);
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--cyan);
+        margin-bottom: 0.3rem;
+    }}
+    .faq-container .faq-a {{
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }}
+    
+    #MainMenu, footer, header {{ visibility: hidden !important; display: none !important; }}
+    </style>
+    """
+    
+st.markdown(get_theme_css(), unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────
 # LANDING PAGE
@@ -882,8 +943,8 @@ def landing_page():
     lang = st.session_state.get('lang', 'en')
     t = LANGUAGES[lang]
     
-    # Language toggle
-    col_lang1, col_lang2, col_lang3, col_lang4 = st.columns([8, 0.8, 0.8, 0.8])
+    # Language + Theme toggle
+    col_lang1, col_lang2, col_lang3, col_lang4, col_lang5 = st.columns([8, 0.8, 0.8, 0.8, 0.8])
     with col_lang2:
         if st.button(t['lang_en'], key="lang_en_landing"):
             st.session_state.lang = "en"
@@ -896,6 +957,10 @@ def landing_page():
         if st.button(t['lang_es'], key="lang_es_landing"):
             st.session_state.lang = "es"
             st.rerun()
+    with col_lang5:
+        theme_label = t['theme_light'] if st.session_state.theme == "dark" else t['theme_dark']
+        if st.button(theme_label, key="theme_landing"):
+            toggle_theme()
     
     # Hero
     st.markdown(f"""
@@ -957,6 +1022,26 @@ def landing_page():
         </div>
         """, unsafe_allow_html=True)
     
+    # FAQ Section
+    st.markdown("---")
+    st.markdown(f"## {t['faq_title']}")
+    
+    faqs = [
+        (t['faq_q1'], t['faq_a1']),
+        (t['faq_q2'], t['faq_a2']),
+        (t['faq_q3'], t['faq_a3']),
+        (t['faq_q4'], t['faq_a4']),
+        (t['faq_q5'], t['faq_a5'])
+    ]
+    
+    for q, a in faqs:
+        st.markdown(f"""
+        <div class="faq-container">
+            <div class="faq-q">❓ {q}</div>
+            <div class="faq-a">{a}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
     st.markdown(f"""
     <div style="text-align:center; color:var(--text-muted); font-size:0.7rem; padding:2rem 0; border-top:1px solid var(--border-glass); margin-top:1rem;">
         {t['footer']}
@@ -970,7 +1055,7 @@ def signup_page():
     lang = st.session_state.get('lang', 'en')
     t = LANGUAGES[lang]
     
-    col_lang1, col_lang2, col_lang3, col_lang4 = st.columns([8, 0.8, 0.8, 0.8])
+    col_lang1, col_lang2, col_lang3, col_lang4, col_lang5 = st.columns([8, 0.8, 0.8, 0.8, 0.8])
     with col_lang2:
         if st.button(t['lang_en'], key="lang_en_signup"):
             st.session_state.lang = "en"
@@ -983,6 +1068,10 @@ def signup_page():
         if st.button(t['lang_es'], key="lang_es_signup"):
             st.session_state.lang = "es"
             st.rerun()
+    with col_lang5:
+        theme_label = t['theme_light'] if st.session_state.theme == "dark" else t['theme_dark']
+        if st.button(theme_label, key="theme_signup"):
+            toggle_theme()
     
     st.markdown(f"### {t['signup_title']}")
     st.markdown(t['signup_subtitle'])
@@ -1020,7 +1109,7 @@ def login_page():
     lang = st.session_state.get('lang', 'en')
     t = LANGUAGES[lang]
     
-    col_lang1, col_lang2, col_lang3, col_lang4 = st.columns([8, 0.8, 0.8, 0.8])
+    col_lang1, col_lang2, col_lang3, col_lang4, col_lang5 = st.columns([8, 0.8, 0.8, 0.8, 0.8])
     with col_lang2:
         if st.button(t['lang_en'], key="lang_en_login"):
             st.session_state.lang = "en"
@@ -1033,6 +1122,10 @@ def login_page():
         if st.button(t['lang_es'], key="lang_es_login"):
             st.session_state.lang = "es"
             st.rerun()
+    with col_lang5:
+        theme_label = t['theme_light'] if st.session_state.theme == "dark" else t['theme_dark']
+        if st.button(theme_label, key="theme_login"):
+            toggle_theme()
     
     st.markdown(f"### {t['login_title']}")
     
@@ -1070,8 +1163,8 @@ def dashboard():
         st.rerun()
         return
     
-    # Language toggle
-    col_lang1, col_lang2, col_lang3, col_lang4 = st.columns([8, 0.8, 0.8, 0.8])
+    # Language + Theme toggle
+    col_lang1, col_lang2, col_lang3, col_lang4, col_lang5 = st.columns([8, 0.8, 0.8, 0.8, 0.8])
     with col_lang2:
         if st.button(t['lang_en'], key="lang_en_dash"):
             st.session_state.lang = "en"
@@ -1084,6 +1177,10 @@ def dashboard():
         if st.button(t['lang_es'], key="lang_es_dash"):
             st.session_state.lang = "es"
             st.rerun()
+    with col_lang5:
+        theme_label = t['theme_light'] if st.session_state.theme == "dark" else t['theme_dark']
+        if st.button(theme_label, key="theme_dash"):
+            toggle_theme()
     
     # Top Nav
     st.markdown(f"""
@@ -1155,14 +1252,15 @@ def dashboard():
     st.markdown("---")
     
     # Tabs
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "🎯 Scanner",
         "📝 Manual",
         "📊 History",
-        "📄 Slip"
+        "📄 Slip",
+        "❓ FAQ"
     ])
     
-    # Scanner
+    # ─── TAB 1: SCANNER ──────────────────────────────────────
     with tab1:
         st.markdown(f"### {t['scanner_title']}")
         
@@ -1176,13 +1274,27 @@ def dashboard():
         
         if st.button(t['scan_btn'], use_container_width=True, type="primary"):
             with st.spinner("Scanning 70+ bookmakers..."):
-                sample_bets = [
-                    {'match': 'Arsenal vs Coventry', 'outcome': 'Draw', 'odds': 8.20, 'ev_percent': 8.0, 'true_prob': 13.2, 'stake': 5.00, 'potential_return': 41.00, 'book': 'Betfair'},
-                    {'match': 'Everton vs Crystal Palace', 'outcome': 'Everton', 'odds': 2.14, 'ev_percent': 8.0, 'true_prob': 50.5, 'stake': 17.54, 'potential_return': 37.54, 'book': 'Pinnacle'},
-                    {'match': 'Ipswich vs Sunderland', 'outcome': 'Draw', 'odds': 3.44, 'ev_percent': 8.0, 'true_prob': 31.4, 'stake': 8.20, 'potential_return': 28.20, 'book': 'Bet365'},
-                    {'match': 'Hull City vs Man Utd', 'outcome': 'Hull City', 'odds': 6.88, 'ev_percent': 8.0, 'true_prob': 15.7, 'stake': 5.00, 'potential_return': 34.40, 'book': 'Pinnacle'},
-                    {'match': 'Brentford vs Spurs', 'outcome': 'Spurs', 'odds': 2.99, 'ev_percent': 8.0, 'true_prob': 36.1, 'stake': 10.05, 'potential_return': 30.05, 'book': 'Betfair'}
+                sample_bets = []
+                
+                # Generate realistic EV bets with different values
+                import random
+                ev_values = [3.2, 4.1, 5.8, 6.7, 8.2, 9.5, 10.1, 12.3, 15.0]
+                
+                sample_data = [
+                    {'match': 'Arsenal vs Coventry', 'outcome': 'Draw', 'odds': 8.20, 'book': 'Betfair', 'stake': 5.00, 'return': 41.00},
+                    {'match': 'Everton vs Crystal Palace', 'outcome': 'Everton', 'odds': 2.14, 'book': 'Pinnacle', 'stake': 17.54, 'return': 37.54},
+                    {'match': 'Ipswich vs Sunderland', 'outcome': 'Draw', 'odds': 3.44, 'book': 'Bet365', 'stake': 8.20, 'return': 28.20},
+                    {'match': 'Hull City vs Man Utd', 'outcome': 'Hull City', 'odds': 6.88, 'book': 'Pinnacle', 'stake': 5.00, 'return': 34.40},
+                    {'match': 'Brentford vs Spurs', 'outcome': 'Spurs', 'odds': 2.99, 'book': 'Betfair', 'stake': 10.05, 'return': 30.05},
+                    {'match': 'Leeds vs Southampton', 'outcome': 'Leeds', 'odds': 3.15, 'book': 'Bet365', 'stake': 12.50, 'return': 39.38},
+                    {'match': 'Norwich vs Watford', 'outcome': 'Draw', 'odds': 5.50, 'book': 'Pinnacle', 'stake': 8.00, 'return': 44.00}
                 ]
+                
+                for item in sample_data[:5]:
+                    ev_pct = random.choice(ev_values)
+                    item['ev_percent'] = ev_pct
+                    item['true_prob'] = (1 / item['odds']) * (1 + ev_pct / 100)
+                    sample_bets.append(item)
                 
                 for bet in sample_bets:
                     add_bet(st.session_state.user_id, {
@@ -1210,7 +1322,7 @@ def dashboard():
             
             for i, bet in enumerate(st.session_state.scan_results[:5], 1):
                 st.markdown(f"""
-                <div class="arb-card">
+                <div class="arb-card" key="arb_card_{i}">
                     <div class="arb-header">
                         <div class="arb-match">
                             <div class="teams">#{i} {bet['match'].replace(' vs ', ' <span class="vs">vs</span> ')}</div>
@@ -1242,7 +1354,7 @@ def dashboard():
             col3.metric("Expected Return", f"${total_return:.2f}")
             col4.metric("Expected Profit", f"${total_return - total_stake:.2f}")
     
-    # Manual
+    # ─── TAB 2: MANUAL ──────────────────────────────────────
     with tab2:
         st.markdown(f"### {t['manual_title']}")
         
@@ -1287,7 +1399,7 @@ def dashboard():
                     st.success(t['bet_added'].format(home=home_team, away=away_team, outcome=outcome, odds=selected_odds))
                     st.rerun()
     
-    # History
+    # ─── TAB 3: HISTORY ──────────────────────────────────────
     with tab3:
         st.markdown(f"### {t['history_title']}")
         
@@ -1351,7 +1463,7 @@ def dashboard():
         else:
             st.info(t['no_bets'])
     
-    # Slip
+    # ─── TAB 4: SLIP ─────────────────────────────────────────
     with tab4:
         st.markdown(f"### {t['slip_title']}")
         
@@ -1401,6 +1513,26 @@ Total Stake: ${total_stake:.2f}
                 )
         else:
             st.info(t['no_pending_slips'])
+    
+    # ─── TAB 5: FAQ ──────────────────────────────────────────
+    with tab5:
+        st.markdown(f"## {t['faq_title']}")
+        
+        faqs = [
+            (t['faq_q1'], t['faq_a1']),
+            (t['faq_q2'], t['faq_a2']),
+            (t['faq_q3'], t['faq_a3']),
+            (t['faq_q4'], t['faq_a4']),
+            (t['faq_q5'], t['faq_a5'])
+        ]
+        
+        for q, a in faqs:
+            st.markdown(f"""
+            <div class="faq-container">
+                <div class="faq-q">❓ {q}</div>
+                <div class="faq-a">{a}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────
 # SESSION STATE
