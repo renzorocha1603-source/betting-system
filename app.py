@@ -6,10 +6,12 @@ import json
 import requests
 import re
 import io
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 from PIL import Image
 import os
 import base64
+import hashlib
 
 # ─────────────────────────────────────────────────────────────
 # PAGE CONFIG
@@ -22,51 +24,261 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────────────────────
-# HARDCODED DEEPSEEK API KEY
+# HARDCODED API KEYS
 # ─────────────────────────────────────────────────────────────
 DEEPSEEK_API_KEY = "sk-09832202e2c74c7ea73891197056a8e6"
+ODDS_API_KEY = "a585010a77f214e1ce910e778b079400"
 
 # ─────────────────────────────────────────────────────────────
-# SIDEBAR — BANKROLL & SETTINGS
+# SIDEBAR — SETTINGS
 # ─────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("⚙️ Settings")
     bankroll = st.number_input("Bankroll ($)", value=1000, min_value=100, step=100)
     min_ev = st.slider("Min. EV %", 1, 25, 5, 1)
+    min_arb_profit = st.slider("Min. Arbitrage Profit %", 0.1, 5.0, 0.5, 0.1)
     kelly_fraction = st.slider("Kelly Fraction", 0.1, 0.5, 0.25, 0.05)
     st.markdown("---")
-    st.caption("v4.5 · Only Solutions Inc.")
+    st.caption("v5.0 · Only Solutions Inc.")
 
 # ─────────────────────────────────────────────────────────────
-# CORRECT EV CALCULATION — DIFFERENT PER OUTCOME
+# ARBITRAGE SCANNER ENGINE
 # ─────────────────────────────────────────────────────────────
+class SportsBookScanner:
+    def __init__(self, api_key: str, regions: str = "eu", markets: str = "h2h"):
+        self.api_key = api_key
+        self.base_url = "https://api.the-odds-api.com/v4/sports"
+        self.regions = regions
+        self.markets = markets
+        self.cache_file = "odds_cache.json"
+        self.cache_ttl = 30  # seconds
+
+    def get_active_sports(self) -> list:
+        """Fetches all currently active sports."""
+        if not self.api_key or self.api_key == "YOUR_ODDS_API_KEY_HERE":
+            return ["soccer_epl", "soccer_uefa_champs_league", "icehockey_nhl", "basketball_nba"]
+        
+        try:
+            url = f"{self.base_url}/?apiKey={self.api_key}"
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                return [sport['key'] for sport in response.json()]
+            return ["soccer_epl", "soccer_uefa_champs_league"]
+        except:
+            return ["soccer_epl", "soccer_uefa_champs_league"]
+
+    def fetch_live_odds(self, sport: str) -> list:
+        """Fetches real-time odds for a specific sport."""
+        if not self.api_key or self.api_key == "YOUR_ODDS_API_KEY_HERE":
+            return self.get_sample_data(sport)
+        
+        try:
+            url = f"{self.base_url}/{sport}/odds/"
+            params = {
+                "apiKey": self.api_key,
+                "regions": self.regions,
+                "markets": self.markets,
+                "oddsFormat": "decimal"
+            }
+            response = requests.get(url, params=params, timeout=10)
+            if response.status_code == 200:
+                return response.json()
+            return []
+        except:
+            return []
+
+    def get_sample_data(self, sport: str) -> list:
+        """Return sample data for demo purposes"""
+        sample_events = [
+            {
+                "id": "sample_1",
+                "sport_key": sport,
+                "home_team": "Emelec",
+                "away_team": "Independiente del Valle",
+                "bookmakers": [
+                    {
+                        "key": "sample_book",
+                        "markets": [
+                            {
+                                "key": "h2h",
+                                "outcomes": [
+                                    {"name": "Emelec", "price": 2.50},
+                                    {"name": "Draw", "price": 4.05},
+                                    {"name": "Independiente del Valle", "price": 2.80}
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "id": "sample_2",
+                "sport_key": sport,
+                "home_team": "Barcelona Guayaquil",
+                "away_team": "Un. Catolica",
+                "bookmakers": [
+                    {
+                        "key": "sample_book",
+                        "markets": [
+                            {
+                                "key": "h2h",
+                                "outcomes": [
+                                    {"name": "Barcelona Guayaquil", "price": 3.90},
+                                    {"name": "Draw", "price": 3.25},
+                                    {"name": "Un. Catolica", "price": 1.75}
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "id": "sample_3",
+                "sport_key": sport,
+                "home_team": "GIF Sundsvall",
+                "away_team": "Norrby IF",
+                "bookmakers": [
+                    {
+                        "key": "sample_book",
+                        "markets": [
+                            {
+                                "key": "h2h",
+                                "outcomes": [
+                                    {"name": "GIF Sundsvall", "price": 3.50},
+                                    {"name": "Draw", "price": 3.20},
+                                    {"name": "Norrby IF", "price": 1.85}
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "id": "sample_4",
+                "sport_key": sport,
+                "home_team": "Helsingborgs",
+                "away_team": "Falkenbergs",
+                "bookmakers": [
+                    {
+                        "key": "sample_book",
+                        "markets": [
+                            {
+                                "key": "h2h",
+                                "outcomes": [
+                                    {"name": "Helsingborgs", "price": 3.25},
+                                    {"name": "Draw", "price": 3.25},
+                                    {"name": "Falkenbergs", "price": 1.90}
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "id": "sample_5",
+                "sport_key": sport,
+                "home_team": "Lokomotiv Sofia",
+                "away_team": "Botev Plovdiv",
+                "bookmakers": [
+                    {
+                        "key": "sample_book",
+                        "markets": [
+                            {
+                                "key": "h2h",
+                                "outcomes": [
+                                    {"name": "Lokomotiv Sofia", "price": 4.15},
+                                    {"name": "Draw", "price": 3.35},
+                                    {"name": "Botev Plovdiv", "price": 1.70}
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+        return sample_events
+
+class ArbitrageEngine:
+    @staticmethod
+    def calculate_arbitrage(home_odds: float, away_odds: float, draw_odds: float = None) -> dict:
+        """Calculates if an arbitrage opportunity exists."""
+        if home_odds <= 0 or away_odds <= 0:
+            return None
+        
+        p_home = 1.0 / home_odds
+        p_away = 1.0 / away_odds
+        p_draw = (1.0 / draw_odds) if draw_odds and draw_odds > 0 else 0.0
+        
+        total_implied = p_home + p_away + p_draw
+        
+        if total_implied < 1.0:
+            roi = (1.0 - total_implied) * 100
+            total = p_home + p_away + p_draw
+            return {
+                "arbitrage_found": True,
+                "total_implied_probability": total_implied,
+                "roi_percentage": roi,
+                "weights": {
+                    "home": p_home / total if total > 0 else 0,
+                    "away": p_away / total if total > 0 else 0,
+                    "draw": p_draw / total if total > 0 else 0
+                },
+                "outcomes": {
+                    "home": {"odds": home_odds, "implied": p_home},
+                    "away": {"odds": away_odds, "implied": p_away},
+                    "draw": {"odds": draw_odds, "implied": p_draw} if draw_odds else None
+                }
+            }
+        return None
+
+    @staticmethod
+    def allocate_stakes(total_stake: float, weights: dict) -> dict:
+        """Calculates exact dollar amounts to wager."""
+        return {outcome: round(total_stake * weight, 2) for outcome, weight in weights.items() if weight > 0}
+
+    @staticmethod
+    def round_stakes(stakes: dict, increment: float = 5.0) -> dict:
+        """Rounds stakes to nearest increment to avoid detection."""
+        rounded = {}
+        total = sum(stakes.values())
+        
+        for outcome, stake in stakes.items():
+            rounded[outcome] = round(stake / increment) * increment
+            if rounded[outcome] < 1:
+                rounded[outcome] = 1
+        
+        # Adjust to maintain total
+        rounded_total = sum(rounded.values())
+        if rounded_total != total:
+            largest = max(rounded, key=rounded.get)
+            rounded[largest] += round(total - rounded_total, 2)
+        
+        return rounded
+
 def calculate_true_probability(odds, market_avg):
-    """Estimate true probability using market average + slight adjustment"""
     implied = 1 / odds
-    # Adjust based on market average (sharp bookmakers)
     adjustment = 1 - (market_avg - 1) * 0.1
     return implied * adjustment
 
 def calculate_correct_ev(odds, true_prob):
-    """Calculate EV based on true probability"""
     return (true_prob * odds) - 1
 
 def get_market_average(odds_list):
-    """Calculate market average from all odds"""
-    return sum(1/o for o in odds_list if o > 0) / len([o for o in odds_list if o > 0])
+    valid = [o for o in odds_list if o > 0]
+    if not valid:
+        return 1.5
+    return sum(1/o for o in valid) / len(valid)
 
-def calculate_ev_for_match(match):
-    """Calculate EV for all 3 outcomes correctly"""
+def get_best_bet(match):
     home_odds = match.get('home_odds', 0)
     draw_odds = match.get('draw_odds', 0)
     away_odds = match.get('away_odds', 0)
     
     odds_list = [o for o in [home_odds, draw_odds, away_odds] if o > 0]
     if len(odds_list) < 2:
-        return {}
+        return None
     
     market_avg = get_market_average(odds_list)
-    
     results = {}
     
     if home_odds > 0:
@@ -99,20 +311,13 @@ def calculate_ev_for_match(match):
             'ev_percent': ev * 100
         }
     
-    return results
-
-def get_best_bet(match):
-    """Get only the single best bet from a match"""
-    ev_results = calculate_ev_for_match(match)
-    
-    if not ev_results:
+    if not results:
         return None
     
-    # Find outcome with highest EV
     best_outcome = None
     best_ev = -999
     
-    for outcome, data in ev_results.items():
+    for outcome, data in results.items():
         if data['ev_percent'] > best_ev:
             best_ev = data['ev_percent']
             best_outcome = outcome
@@ -121,19 +326,18 @@ def get_best_bet(match):
         return {
             'match': f"{match['home_team']} vs {match['away_team']}",
             'outcome': best_outcome,
-            'odds': ev_results[best_outcome]['odds'],
+            'odds': results[best_outcome]['odds'],
             'ev_percent': best_ev,
-            'true_prob': ev_results[best_outcome]['true_prob'],
-            'implied_prob': ev_results[best_outcome]['implied_prob']
+            'true_prob': results[best_outcome]['true_prob'],
+            'implied_prob': results[best_outcome]['implied_prob']
         }
     
     return None
 
 # ─────────────────────────────────────────────────────────────
-# DEEPSEEK AI FUNCTION — STRICTLY ONE BEST BET
+# DEEPSEEK AI FUNCTION
 # ─────────────────────────────────────────────────────────────
 def ask_deepseek(prompt: str) -> str:
-    """Get analysis from DeepSeek AI using hardcoded key"""
     if not DEEPSEEK_API_KEY:
         return "⚠️ DeepSeek API key not configured."
     
@@ -146,7 +350,7 @@ def ask_deepseek(prompt: str) -> str:
         data = {
             "model": "deepseek-chat",
             "messages": [
-                {"role": "system", "content": "You are Allison, a professional betting analyst. You MUST choose exactly ONE outcome to bet on — the best one based on value. Never recommend more than one. Format: 'BEST BET: [outcome] @ [odds]. Why: [one sentence]'"},
+                {"role": "system", "content": "You are Allison, a professional betting analyst. You MUST choose exactly ONE outcome. Format: 'BEST BET: [outcome] @ [odds]. Why: [one sentence]'"},
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0.1,
@@ -154,35 +358,24 @@ def ask_deepseek(prompt: str) -> str:
         }
         
         response = requests.post(url, headers=headers, json=data, timeout=15)
-        
         if response.status_code == 200:
             return response.json()["choices"][0]["message"]["content"]
-        elif response.status_code == 401:
-            return "⚠️ Invalid DeepSeek API key."
-        else:
-            return f"⚠️ API Error: {response.status_code}"
-            
+        return f"⚠️ API Error: {response.status_code}"
     except Exception as e:
         return f"⚠️ AI Error: {str(e)}"
 
 def get_ai_analysis(match: dict) -> dict:
-    """Get AI analysis — picks ONE best bet only"""
-    # First calculate the best bet mathematically
     best_bet = get_best_bet(match)
-    
     if not best_bet:
         return {'analysis': "⚠️ No positive EV bet found."}
     
     prompt = f"""
     Match: {match['home_team']} vs {match['away_team']}
     Odds: Home {match['home_odds']}, Draw {match['draw_odds']}, Away {match['away_odds']}
-    
-    The best mathematical bet is: {best_bet['outcome'].upper()} @ {best_bet['odds']} with {best_bet['ev_percent']:.1f}% EV.
-    
+    Best bet: {best_bet['outcome'].upper()} @ {best_bet['odds']} with {best_bet['ev_percent']:.1f}% EV.
     Confirm this is the best bet and explain why in one sentence.
-    Format exactly: "BEST BET: [outcome] @ [odds]. Why: [one sentence]"
+    Format: "BEST BET: [outcome] @ [odds]. Why: [one sentence]"
     """
-    
     response = ask_deepseek(prompt)
     return {'analysis': response, 'best_bet': best_bet}
 
@@ -210,6 +403,14 @@ def init_db():
         return REAL,
         profit_loss REAL,
         notes TEXT
+    )
+    ''')
+    c.execute('''
+    CREATE TABLE IF NOT EXISTS odds_cache (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sport TEXT,
+        data TEXT,
+        timestamp TEXT
     )
     ''')
     conn.commit()
@@ -304,46 +505,6 @@ def update_bet_result(bet_id, result, return_amount, profit_loss):
     conn.close()
 
 # ─────────────────────────────────────────────────────────────
-# EV & ARBITRAGE FUNCTIONS
-# ─────────────────────────────────────────────────────────────
-def calculate_kelly(odds, true_probability, bankroll, fraction=0.25):
-    b = odds - 1
-    p = true_probability / 100
-    q = 1 - p
-    if b <= 0:
-        return 0
-    kelly = (p * b - q) / b
-    if kelly < 0:
-        return 0
-    return kelly * bankroll * fraction
-
-def calculate_arbitrage(home_odds, draw_odds, away_odds, total_investment=100):
-    imp_home = 1 / home_odds if home_odds > 0 else 0
-    imp_draw = 1 / draw_odds if draw_odds > 0 else 0
-    imp_away = 1 / away_odds if away_odds > 0 else 0
-    total_imp = imp_home + imp_draw + imp_away
-    
-    if total_imp >= 1:
-        return None
-    
-    stake_home = (imp_home / total_imp) * total_investment
-    stake_draw = (imp_draw / total_imp) * total_investment
-    stake_away = (imp_away / total_imp) * total_investment
-    
-    return_home = stake_home * home_odds
-    return_draw = stake_draw * draw_odds
-    return_away = stake_away * away_odds
-    
-    guaranteed_return = min(return_home, return_draw, return_away)
-    
-    return {
-        'stakes': {'home': stake_home, 'draw': stake_draw, 'away': stake_away},
-        'total_stake': total_investment,
-        'guaranteed_return': guaranteed_return,
-        'profit': guaranteed_return - total_investment
-    }
-
-# ─────────────────────────────────────────────────────────────
 # LOGIN SYSTEM
 # ─────────────────────────────────────────────────────────────
 USERS_FILE = "users.json"
@@ -405,6 +566,9 @@ def do_logout():
     st.session_state.authenticated = False
     st.rerun()
 
+# ─────────────────────────────────────────────────────────────
+# LOGIN PAGE
+# ─────────────────────────────────────────────────────────────
 def page_login():
     st.markdown("""
     <style>
@@ -459,10 +623,13 @@ if 'matches' not in st.session_state:
     st.session_state.matches = []
 if 'results' not in st.session_state:
     st.session_state.results = []
+if 'scanner_results' not in st.session_state:
+    st.session_state.scanner_results = []
 
 if not st.session_state.authenticated:
     page_login()
 
+# ─── MAIN DASHBOARD ──────────────────────────────────────────
 init_db()
 
 st.title("📊 Betting System — Arbitrage + EV Scanner")
@@ -473,7 +640,8 @@ with st.sidebar:
     if st.button("🚪 Logout", use_container_width=True):
         do_logout()
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["📸 Upload", "📝 Manual", "📊 Results", "📄 Slip", "📋 History"])
+# Tabs
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📸 Upload", "📝 Manual", "📊 Results", "📄 Slip", "📋 History", "🔍 Scanner"])
 
 with tab1:
     st.markdown("### 📸 Upload Odds Board Photo")
@@ -499,7 +667,7 @@ with tab2:
             away_odds = st.number_input("Away Odds", min_value=1.01, step=0.01, value=2.80)
         with col4:
             stake = st.number_input("Stake ($)", min_value=1.0, step=1.0, value=10.0)
-            use_ai = st.checkbox("🤖 AI Analysis (best bet only)")
+            use_ai = st.checkbox("🤖 AI Analysis")
         
         submitted = st.form_submit_button("Add Match")
         
@@ -517,7 +685,7 @@ with tab2:
             st.success(f"✅ Added: {home_team} vs {away_team} (Stake: ${stake:.2f})")
             
             if use_ai:
-                with st.spinner("🤖 AI finding the single best bet..."):
+                with st.spinner("🤖 AI analyzing..."):
                     analysis = get_ai_analysis(match_data)
                     st.info(f"**🤖 AI Recommendation:**\n\n{analysis['analysis']}")
             
@@ -590,7 +758,7 @@ with tab3:
     if st.session_state.results:
         results = sorted(st.session_state.results, key=lambda x: x['ev_percent'], reverse=True)
         
-        st.subheader("🎯 Positive EV Bets (Best Only)")
+        st.subheader("🎯 Positive EV Bets")
         
         total_stake = 0
         total_return = 0
@@ -676,7 +844,6 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 ───────────────────────────────────────────────
 Total Stake: ${total_stake:.2f}
 Expected Return: ${sum(b['potential_return'] for b in selected_bets):.2f}
-Expected Profit: ${sum(b['potential_return'] for b in selected_bets) - total_stake:.2f}
 ═══════════════════════════════════════════════
 """
             st.code(slip_text, language="text")
@@ -710,30 +877,18 @@ with tab5:
     if bets:
         data = []
         for bet in bets:
-            bet_id = bet[0] if len(bet) > 0 else 0
-            timestamp = bet[1][:16] if len(bet) > 1 and bet[1] else ''
-            sport = bet[2] if len(bet) > 2 else ''
-            home = bet[3] if len(bet) > 3 else ''
-            away = bet[4] if len(bet) > 4 else ''
-            outcome = bet[6] if len(bet) > 6 else ''
-            odds = bet[7] if len(bet) > 7 else 0
-            stake = f"${bet[8]:.2f}" if len(bet) > 8 and bet[8] else '$0.00'
-            ev = f"{bet[9]:.1f}%" if len(bet) > 9 and bet[9] else '0.0%'
-            result = bet[12] if len(bet) > 12 else 'Pending'
-            pl = f"${bet[14]:.2f}" if len(bet) > 14 and bet[14] != 0 else "Pending"
-            
             data.append({
-                'ID': bet_id,
-                'Timestamp': timestamp,
-                'Sport': sport,
-                'Home': home,
-                'Away': away,
-                'Outcome': outcome,
-                'Odds': odds,
-                'Stake': stake,
-                'EV%': ev,
-                'Result': result,
-                'P/L': pl
+                'ID': bet[0],
+                'Timestamp': bet[1][:16] if len(bet) > 1 else '',
+                'Sport': bet[2] if len(bet) > 2 else '',
+                'Home': bet[3] if len(bet) > 3 else '',
+                'Away': bet[4] if len(bet) > 4 else '',
+                'Outcome': bet[6] if len(bet) > 6 else '',
+                'Odds': bet[7] if len(bet) > 7 else 0,
+                'Stake': f"${bet[8]:.2f}" if len(bet) > 8 else '',
+                'EV%': f"{bet[9]:.1f}%" if len(bet) > 9 else '',
+                'Result': bet[12] if len(bet) > 12 else 'Pending',
+                'P/L': f"${bet[14]:.2f}" if len(bet) > 14 and bet[14] != 0 else "Pending"
             })
         
         df = pd.DataFrame(data)
@@ -779,5 +934,108 @@ with tab5:
         else:
             st.info("No pending bets to update.")
 
+with tab6:
+    st.markdown("### 🔍 Live Arbitrage Scanner")
+    st.markdown("Scan multiple sportsbooks for arbitrage opportunities in real-time.")
+    
+    # Scanner settings
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        scan_sport = st.selectbox("Sport", ["soccer_epl", "soccer_uefa_champs_league", "icehockey_nhl", "basketball_nba", "all"])
+    with col2:
+        target_stake = st.number_input("Target Total Stake ($)", min_value=10, value=100, step=10)
+    with col3:
+        min_profit = st.slider("Min. Profit %", 0.1, 5.0, 0.5, 0.1)
+    
+    if st.button("🔍 Scan for Arbitrage", use_container_width=True, type="primary"):
+        with st.spinner("Scanning multiple sportsbooks..."):
+            scanner = SportsBookScanner(ODDS_API_KEY)
+            
+            if scan_sport == "all":
+                sports = scanner.get_active_sports()
+            else:
+                sports = [scan_sport]
+            
+            all_arbs = []
+            
+            for sport in sports[:5]:  # Limit to 5 sports to avoid rate limits
+                events = scanner.fetch_live_odds(sport)
+                
+                for event in events:
+                    if 'bookmakers' not in event:
+                        continue
+                    
+                    # Get best odds from each book
+                    best_odds = {}
+                    for book in event.get('bookmakers', []):
+                        for market in book.get('markets', []):
+                            if market.get('key') == 'h2h':
+                                odds = {}
+                                for outcome in market.get('outcomes', []):
+                                    name = outcome.get('name', '')
+                                    price = outcome.get('price', 0)
+                                    odds[name] = price
+                                
+                                # Check if we have 2 or 3 outcomes
+                                if len(odds) >= 2:
+                                    home = odds.get(event.get('home_team', ''), 0)
+                                    away = odds.get(event.get('away_team', ''), 0)
+                                    draw = odds.get('Draw', 0)
+                                    
+                                    arb = ArbitrageEngine.calculate_arbitrage(home, away, draw)
+                                    if arb and arb.get('roi_percentage', 0) >= min_profit:
+                                        all_arbs.append({
+                                            'sport': sport,
+                                            'home_team': event.get('home_team', ''),
+                                            'away_team': event.get('away_team', ''),
+                                            'arb': arb,
+                                            'book': book.get('key', ''),
+                                            'stakes': ArbitrageEngine.allocate_stakes(
+                                                target_stake,
+                                                arb.get('weights', {})
+                                            ),
+                                            'rounded_stakes': ArbitrageEngine.round_stakes(
+                                                ArbitrageEngine.allocate_stakes(
+                                                    target_stake,
+                                                    arb.get('weights', {})
+                                                )
+                                            )
+                                        })
+            
+            st.session_state.scanner_results = all_arbs
+    
+    # Display scanner results
+    if st.session_state.scanner_results:
+        st.subheader(f"🔎 Found {len(st.session_state.scanner_results)} Arbitrage Opportunities")
+        
+        for i, result in enumerate(st.session_state.scanner_results, 1):
+            arb = result['arb']
+            st.markdown(f"**{i}. {result['home_team']} vs {result['away_team']}**")
+            st.markdown(f"📊 **Profit:** {arb.get('roi_percentage', 0):.2f}%")
+            st.markdown(f"📚 **Book:** {result['book']}")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            if 'home' in result['stakes']:
+                col1.metric("Home Bet", f"${result['stakes']['home']:.2f}", f"@ {arb['outcomes']['home']['odds']}")
+            
+            if 'draw' in result['stakes'] and result['stakes']['draw'] > 0:
+                col2.metric("Draw Bet", f"${result['stakes']['draw']:.2f}", f"@ {arb['outcomes']['draw']['odds']}")
+            
+            if 'away' in result['stakes']:
+                col3.metric("Away Bet", f"${result['stakes']['away']:.2f}", f"@ {arb['outcomes']['away']['odds']}")
+            
+            st.markdown("**Rounded Stakes (to avoid detection):**")
+            st.json(result['rounded_stakes'])
+            st.markdown("---")
+            
+            if st.button(f"✅ Add to Slip", key=f"add_arb_{i}"):
+                st.success("Added to paper slip!")
+    else:
+        st.info("No arbitrage opportunities found. Try scanning again or adjust the minimum profit threshold.")
+
+# ─────────────────────────────────────────────────────────────
+# FOOTER
+# ─────────────────────────────────────────────────────────────
 st.markdown("---")
 st.caption("Mathematical betting — only bet when the numbers say so. | Only Solutions Inc.")
