@@ -26,7 +26,6 @@ st.set_page_config(
 # HARDCODED DEEPSEEK API KEY
 # ─────────────────────────────────────────────────────────────
 DEEPSEEK_API_KEY = "sk-09832202e2c74c7ea73891197056a8e6"
- <-- PASTE YOUR KEY HERE
 
 # ─────────────────────────────────────────────────────────────
 # SIDEBAR — BANKROLL & SETTINGS
@@ -44,9 +43,8 @@ with st.sidebar:
 # ─────────────────────────────────────────────────────────────
 def ask_deepseek(prompt: str) -> str:
     """Get analysis from DeepSeek AI using hardcoded key"""
-    if not DEEPSEEK_API_KEY or DEEPSEEK_API_KEY == "sk-09832202e2c74c7ea73891197056a8e6
-":
-        return "⚠️ Please replace 'sk-your-deepseek-key-here' with your actual DeepSeek API key."
+    if not DEEPSEEK_API_KEY:
+        return "⚠️ DeepSeek API key not configured."
     
     try:
         url = "https://api.deepseek.com/v1/chat/completions"
@@ -57,7 +55,7 @@ def ask_deepseek(prompt: str) -> str:
         data = {
             "model": "deepseek-chat",
             "messages": [
-                {"role": "system", "content": "You are a professional betting analyst. Provide concise, actionable advice. Never guess — say 'I don't know' if uncertain."},
+                {"role": "system", "content": "You are Allison, a professional betting analyst. Provide concise, actionable advice. Never guess — say 'I don't know' if uncertain."},
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0.3,
