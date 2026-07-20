@@ -350,28 +350,32 @@ LANGUAGES = {
 def init_db():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
-    c.execute('''
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE,
-        password TEXT,
-        name TEXT,
-        created_at TEXT,
-        subscription_status TEXT DEFAULT 'active',
-        is_admin INTEGER DEFAULT 0
-    )
-    ''')
     
-    # Create admin account if it doesn't exist
-    admin_email = "admin@onlys.com"
-    admin_password = hashlib.sha256("admin123".encode()).hexdigest()
-    c.execute('SELECT * FROM users WHERE email = ?', (admin_email,))
-    if not c.fetchone():
+    # Check if users table exists
+    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+    table_exists = c.fetchone()
+    
+    if not table_exists:
+        # Create fresh table with is_admin column
         c.execute('''
-        INSERT INTO users (email, password, name, created_at, is_admin)
-        VALUES (?, ?, ?, ?, ?)
-        ''', (admin_email, admin_password, "Administrator", datetime.now().isoformat(), 1))
+        CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE,
+            password TEXT,
+            name TEXT,
+            created_at TEXT,
+            subscription_status TEXT DEFAULT 'active',
+            is_admin INTEGER DEFAULT 0
+        )
+        ''')
+    else:
+        # Check if is_admin column exists
+        c.execute("PRAGMA table_info(users)")
+        columns = [col[1] for col in c.fetchall()]
+        if 'is_admin' not in columns:
+            c.execute('ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0')
     
+    # Create bets table
     c.execute('''
     CREATE TABLE IF NOT EXISTS bets (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -390,6 +394,17 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id)
     )
     ''')
+    
+    # Create admin account if it doesn't exist
+    admin_email = "admin@onlys.com"
+    admin_password = hashlib.sha256("admin123".encode()).hexdigest()
+    c.execute('SELECT * FROM users WHERE email = ?', (admin_email,))
+    if not c.fetchone():
+        c.execute('''
+        INSERT INTO users (email, password, name, created_at, is_admin)
+        VALUES (?, ?, ?, ?, ?)
+        ''', (admin_email, admin_password, "Administrator", datetime.now().isoformat(), 1))
+    
     conn.commit()
     conn.close()
 
@@ -547,8 +562,10 @@ def calculate_true_probability(odds, market_avg):
     return implied * adjustment
 
 # ─────────────────────────────────────────────────────────────
-# LANDING PAGE (PUBLIC) — WITH LANGUAGE TOGGLE
+# REST OF APP — LANDING PAGE, SIGNUP, LOGIN, DASHBOARD
 # ─────────────────────────────────────────────────────────────
+# ... (keep all the rest of the functions exactly as they were)
+
 def landing_page():
     lang = st.session_state.get('lang', 'en')
     t = LANGUAGES[lang]
@@ -1320,7 +1337,7 @@ if st.session_state.authenticated:
             <div>
                 <div style="color:#F0F4FA; font-weight:500;">{st.session_state.user_name}</div>
                 <div style="color:#4A6E8A; font-size:0.8rem;">{st.session_state.user_email}</div>
-                {st.session_state.is_admin and '<div style="color:#00D4FF; font-size:0.7rem;">👑 Admin</div>' or ''}
+                <div style="color:#00D4FF; font-size:0.7rem;">{'👑 Admin' if st.session_state.is_admin else '👤 User'}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
