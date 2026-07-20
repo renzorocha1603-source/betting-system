@@ -872,6 +872,101 @@ def dashboard():
         else:
             st.info("No bets yet. Start by scanning for opportunities!")
 
+    # ─── TAB 4: PAPER SLIP ──────────────────────────────────────────
+    with tab4:
+        st.markdown("### 📄 Paper Slip Generator")
+        st.markdown("Generate a printable paper slip for retail betting.")
+        
+        bets = get_user_bets(st.session_state.user_id)
+        pending = [b for b in bets if b[10] == 'Pending']
+        
+        if pending:
+            selected = []
+            st.subheader("Select bets for your slip")
+            
+            for bet in pending[:5]:
+                if st.checkbox(f"{bet[4]} vs {bet[5]} — {bet[6]} @ {bet[7]}", key=f"slip_{bet[0]}"):
+                    selected.append(bet)
+            
+            if selected:
+                total_stake = sum(b[8] for b in selected)
+                
+                slip_text = f"""
+    ═══════════════════════════════════════════════
+    📄 PARI SPORTIF — BULLETIN DE JEU
+    ═══════════════════════════════════════════════
+    Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+    ───────────────────────────────────────────────
+    """
+                for bet in selected:
+                    slip_text += f"""
+    {bet[4]} vs {bet[5]}
+       Bet: {bet[6]} @ {bet[7]}
+       Stake: ${bet[8]:.2f}
+       Potential: ${bet[8] * bet[7]:.2f}
+    """
+                
+                slip_text += f"""
+    ───────────────────────────────────────────────
+    Total Stake: ${total_stake:.2f}
+    ═══════════════════════════════════════════════
+    """
+                
+                st.code(slip_text, language="text")
+                
+                st.download_button(
+                    label="📥 Download Slip",
+                    data=slip_text,
+                    file_name=f"slip_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
+        else:
+            st.info("No pending bets available. Scan for opportunities first!")
+
+    # ─── TAB 5: HELP ──────────────────────────────────────────────────
+    with tab5:
+        st.markdown("### ℹ️ Help & Guides")
+        
+        st.markdown("""
+        **Welcome to the Only Solutions Betting System!**
+        
+        This app uses **mathematical betting** to find profitable opportunities.
+        
+        ---
+        
+        ### 🎯 Getting Started
+        
+        1. **Scan for opportunities** — Click the Scanner tab
+        2. **Review the best bets** — Check EV% and probabilities
+        3. **Place your bets** — Use paper slip or manual betting
+        4. **Track results** — Update wins/losses in History
+        
+        ---
+        
+        ### 📖 Key Concepts
+        
+        **EV (Expected Value)** — The average profit per bet over time. Only bet when EV is positive!
+        
+        **Arbitrage** — A guaranteed profit opportunity across different bookmakers.
+        
+        **Kelly Criterion** — Optimal bet size based on your bankroll.
+        
+        ---
+        
+        ### ❓ Need Help?
+        
+        Contact us at: **support@onlysolutions.ca**
+        
+        """)
+        
+        st.markdown("---")
+        st.markdown(f"""
+        <div style="text-align:center; color:#1A3050; font-size:0.8rem;">
+            {COMPANY_NAME} · {DOMAIN} · {YEAR}
+        </div>
+        """, unsafe_allow_html=True)
+
 def get_bet_summary(bets):
     total = len(bets)
     wins = len([b for b in bets if b[10] == 'Win'])
@@ -885,102 +980,6 @@ def get_bet_summary(bets):
         'win_rate': wins / (wins + losses) * 100 if (wins + losses) > 0 else 0,
         'net_profit': profit
     }
-
-# ─────────────────────────────────────────────────────────────
-# TAB 4: PAPER SLIP ─────────────────────────────────────────────
-with tab4:
-    st.markdown("### 📄 Paper Slip Generator")
-    st.markdown("Generate a printable paper slip for retail betting.")
-    
-    bets = get_user_bets(st.session_state.user_id)
-    pending = [b for b in bets if b[10] == 'Pending']
-    
-    if pending:
-        selected = []
-        st.subheader("Select bets for your slip")
-        
-        for bet in pending[:5]:
-            if st.checkbox(f"{bet[4]} vs {bet[5]} — {bet[6]} @ {bet[7]}", key=f"slip_{bet[0]}"):
-                selected.append(bet)
-        
-        if selected:
-            total_stake = sum(b[8] for b in selected)
-            
-            slip_text = f"""
-    ═══════════════════════════════════════════════
-    📄 PARI SPORTIF — BULLETIN DE JEU
-    ═══════════════════════════════════════════════
-    Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-    ───────────────────────────────────────────────
-    """
-            for bet in selected:
-                slip_text += f"""
-    {bet[4]} vs {bet[5]}
-       Bet: {bet[6]} @ {bet[7]}
-       Stake: ${bet[8]:.2f}
-       Potential: ${bet[8] * bet[7]:.2f}
-    """
-            
-            slip_text += f"""
-    ───────────────────────────────────────────────
-    Total Stake: ${total_stake:.2f}
-    ═══════════════════════════════════════════════
-    """
-            
-            st.code(slip_text, language="text")
-            
-            st.download_button(
-                label="📥 Download Slip",
-                data=slip_text,
-                file_name=f"slip_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-                mime="text/plain",
-                use_container_width=True
-            )
-    else:
-        st.info("No pending bets available. Scan for opportunities first!")
-
-# ─── TAB 5: HELP ──────────────────────────────────────────────────
-with tab5:
-    st.markdown("### ℹ️ Help & Guides")
-    
-    st.markdown("""
-    **Welcome to the Only Solutions Betting System!**
-    
-    This app uses **mathematical betting** to find profitable opportunities.
-    
-    ---
-    
-    ### 🎯 Getting Started
-    
-    1. **Scan for opportunities** — Click the Scanner tab
-    2. **Review the best bets** — Check EV% and probabilities
-    3. **Place your bets** — Use paper slip or manual betting
-    4. **Track results** — Update wins/losses in History
-    
-    ---
-    
-    ### 📖 Key Concepts
-    
-    **EV (Expected Value)** — The average profit per bet over time. Only bet when EV is positive!
-    
-    **Arbitrage** — A guaranteed profit opportunity across different bookmakers.
-    
-    **Kelly Criterion** — Optimal bet size based on your bankroll.
-    
-    ---
-    
-    ### ❓ Need Help?
-    
-    Contact us at: **support@onlysolutions.ca**
-    
-    """)
-    
-    st.markdown("---")
-    st.markdown(f"""
-    <div style="text-align:center; color:#1A3050; font-size:0.8rem;">
-        {COMPANY_NAME} · {DOMAIN} · {YEAR}
-    </div>
-    """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────
 # SESSION STATE
