@@ -120,6 +120,16 @@ def authenticate_user(email, password):
     conn.close()
     return result
 
+def get_user_bets(user_id):
+    if user_id is None:
+        return []
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute('SELECT * FROM bets WHERE user_id = ? ORDER BY timestamp DESC', (user_id,))
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
 def add_bet(user_id, bet_data):
     if user_id is None:
         return False
@@ -145,16 +155,6 @@ def add_bet(user_id, bet_data):
     conn.commit()
     conn.close()
     return True
-
-def get_user_bets(user_id):
-    if user_id is None:
-        return []
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute('SELECT * FROM bets WHERE user_id = ? ORDER BY timestamp DESC', (user_id,))
-    rows = c.fetchall()
-    conn.close()
-    return rows
 
 def update_bet_result(bet_id, result, return_amount, profit_loss):
     conn = sqlite3.connect('users.db')
@@ -197,7 +197,7 @@ def calculate_ev(odds, true_prob):
     return (true_prob * odds) - 1
 
 # ─────────────────────────────────────────────────────────────
-# CYBER CSS
+# CYBER CSS — BRIGHTER TEXT, BETTER CONTRAST
 # ─────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
@@ -207,16 +207,16 @@ st.markdown("""
 
 :root {
     --bg-deep: #0B0E14;
-    --bg-surface: #0F172A;
-    --bg-card: rgba(255,255,255,0.03);
-    --border-glass: rgba(255,255,255,0.06);
-    --text-primary: #E8EDF5;
-    --text-secondary: #7A8BA0;
-    --text-muted: #3A4A60;
+    --bg-surface: #111927;
+    --bg-card: rgba(20, 30, 50, 0.6);
+    --border-glass: rgba(255, 255, 255, 0.08);
+    --text-primary: #F0F4FF;
+    --text-secondary: #B0C4DE;
+    --text-muted: #6A8CAE;
     --cyan: #00F3FF;
-    --cyan-glow: rgba(0,243,255,0.25);
+    --cyan-glow: rgba(0, 243, 255, 0.3);
     --lime: #39FF14;
-    --lime-glow: rgba(57,255,20,0.2);
+    --lime-glow: rgba(57, 255, 20, 0.25);
     --orange: #FF6B35;
     --purple: #7C3AED;
     --red: #FF3355;
@@ -231,6 +231,7 @@ div[data-testid="stHeader"],
 section[data-testid="stSidebar"] {
     background: var(--bg-deep) !important;
     background-color: var(--bg-deep) !important;
+    color: var(--text-primary) !important;
 }
 
 .block-container {
@@ -238,9 +239,22 @@ section[data-testid="stSidebar"] {
     max-width: 1400px !important;
 }
 
+/* ALL TEXT — MAKING IT BRIGHTER */
+.stMarkdown, .stText, .stCaption, p, div, span, label, h1, h2, h3, h4, h5, h6 {
+    color: var(--text-primary) !important;
+}
+
+.stMarkdown p, .stMarkdown li, .stMarkdown div {
+    color: var(--text-secondary) !important;
+}
+
+.stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+    color: var(--text-primary) !important;
+}
+
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: var(--bg-deep); }
-::-webkit-scrollbar-thumb { background: var(--cyan); border-radius: 2px; box-shadow: 0 0 20px var(--cyan-glow); }
+::-webkit-scrollbar-thumb { background: var(--cyan); border-radius: 2px; }
 
 /* Top Nav */
 .terminal-nav {
@@ -270,12 +284,6 @@ section[data-testid="stSidebar"] {
     0% { transform: translateX(-100%); }
     100% { transform: translateX(100%); }
 }
-.terminal-logo {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-.terminal-logo .icon { font-size: 1.4rem; }
 .terminal-logo .brand {
     font-family: var(--font-display);
     font-size: 1.1rem;
@@ -311,21 +319,20 @@ section[data-testid="stSidebar"] {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.5; transform: scale(0.8); }
 }
-.terminal-status .live-text { color: var(--lime); font-weight: 600; letter-spacing: 0.08em; }
+.terminal-status .live-text { color: var(--lime); font-weight: 600; }
 .terminal-status .stats { color: var(--text-muted); }
 .terminal-status .stats span { color: var(--text-secondary); font-weight: 600; }
 .terminal-status .user-badge {
-    background: rgba(0,243,255,0.06);
-    border: 1px solid rgba(0,243,255,0.1);
+    background: rgba(0,243,255,0.1);
+    border: 1px solid rgba(0,243,255,0.15);
     border-radius: 20px;
     padding: 0.2rem 0.8rem;
     color: var(--cyan);
     font-size: 0.6rem;
     font-weight: 600;
-    letter-spacing: 0.08em;
 }
 
-/* KPI Grid */
+/* KPI Grid — LIGHTER CARDS */
 .kpi-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -333,14 +340,12 @@ section[data-testid="stSidebar"] {
     margin-bottom: 1.5rem;
 }
 .kpi-card {
-    background: var(--bg-card);
+    background: rgba(20, 30, 50, 0.7);
     backdrop-filter: blur(20px);
     border: 1px solid var(--border-glass);
     border-radius: var(--card-radius);
     padding: 1.2rem 1.5rem;
     transition: all 0.3s ease;
-    position: relative;
-    overflow: hidden;
 }
 .kpi-card:hover {
     border-color: var(--cyan);
@@ -368,9 +373,9 @@ section[data-testid="stSidebar"] {
 .kpi-card .change.positive { color: var(--lime); }
 .kpi-card .change.negative { color: var(--red); }
 
-/* Arb Card */
+/* Arb Card — LIGHTER */
 .arb-card {
-    background: var(--bg-card);
+    background: rgba(20, 30, 50, 0.7);
     backdrop-filter: blur(20px);
     border: 1px solid var(--border-glass);
     border-radius: var(--card-radius);
@@ -380,15 +385,6 @@ section[data-testid="stSidebar"] {
 }
 .arb-card:hover {
     border-color: var(--cyan);
-    box-shadow: 0 0 40px rgba(0,243,255,0.04);
-}
-.arb-card .arb-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 0.75rem;
-    flex-wrap: wrap;
-    gap: 0.5rem;
 }
 .arb-card .arb-match .teams {
     font-family: 'Inter', sans-serif;
@@ -396,47 +392,29 @@ section[data-testid="stSidebar"] {
     font-weight: 600;
     color: var(--text-primary);
 }
-.arb-card .arb-match .teams .vs { color: var(--text-muted); font-weight: 400; margin: 0 0.3rem; }
+.arb-card .arb-match .teams .vs { color: var(--text-muted); }
 .arb-card .arb-match .meta {
     font-family: var(--font-mono);
     font-size: 0.6rem;
     color: var(--text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.06em;
-    margin-top: 0.15rem;
 }
 .arb-card .arb-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
     font-family: var(--font-display);
     font-size: 0.75rem;
     font-weight: 700;
     color: var(--lime);
-    background: rgba(57,255,20,0.06);
-    border: 1px solid rgba(57,255,20,0.1);
+    background: rgba(57,255,20,0.1);
+    border: 1px solid rgba(57,255,20,0.15);
     padding: 0.3rem 0.8rem;
     border-radius: 20px;
-    letter-spacing: 0.04em;
-    white-space: nowrap;
-}
-.arb-card .arb-body {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 1rem;
-}
-.arb-card .odds-grid {
-    display: flex;
-    gap: 1.25rem;
 }
 .arb-card .odd-cell {
     display: flex;
     flex-direction: column;
     align-items: center;
     padding: 0.3rem 0.8rem;
-    background: rgba(0,0,0,0.2);
+    background: rgba(0,0,0,0.3);
     border-radius: 8px;
     min-width: 60px;
 }
@@ -445,7 +423,6 @@ section[data-testid="stSidebar"] {
     font-size: 0.5rem;
     color: var(--text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.06em;
 }
 .arb-card .odd-cell .odd-value {
     font-family: var(--font-mono);
@@ -457,13 +434,9 @@ section[data-testid="stSidebar"] {
     color: var(--cyan);
     text-shadow: 0 0 20px var(--cyan-glow);
 }
-.arb-card .arb-actions {
-    display: flex;
-    gap: 0.5rem;
-}
 .arb-card .arb-actions .action-btn {
-    background: rgba(0,243,255,0.06);
-    border: 1px solid rgba(0,243,255,0.1);
+    background: rgba(0,243,255,0.08);
+    border: 1px solid rgba(0,243,255,0.12);
     color: var(--cyan);
     padding: 0.3rem 0.8rem;
     border-radius: 6px;
@@ -473,27 +446,125 @@ section[data-testid="stSidebar"] {
     cursor: pointer;
     transition: all 0.3s ease;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
 }
 .arb-card .arb-actions .action-btn:hover {
-    background: rgba(0,243,255,0.12);
+    background: rgba(0,243,255,0.15);
     border-color: var(--cyan);
-    box-shadow: 0 0 20px var(--cyan-glow);
 }
 .arb-card .arb-actions .action-btn.primary {
     background: linear-gradient(135deg, var(--cyan), #0099CC);
-    color: var(--bg-deep);
+    color: #0B0E14;
     border: none;
 }
 .arb-card .arb-actions .action-btn.primary:hover {
     box-shadow: 0 0 30px var(--cyan-glow);
-    transform: scale(1.02);
 }
 
-/* Streamlit Overrides */
+/* Hero Section */
+.hero-section {
+    text-align: center;
+    padding: 3rem 2rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--card-radius);
+    margin-bottom: 2rem;
+}
+.hero-section h1 {
+    font-family: var(--font-display);
+    font-size: 2.8rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--cyan), var(--lime));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+.hero-section p {
+    color: var(--text-secondary) !important;
+    font-size: 1.1rem;
+}
+.hero-section .badge {
+    background: rgba(0,243,255,0.1);
+    border: 1px solid rgba(0,243,255,0.15);
+    padding: 0.3rem 1rem;
+    border-radius: 20px;
+    color: var(--cyan);
+    font-size: 0.7rem;
+}
+.hero-section .badge-live {
+    background: rgba(57,255,20,0.08);
+    border: 1px solid rgba(57,255,20,0.12);
+    padding: 0.3rem 1rem;
+    border-radius: 20px;
+    color: var(--lime);
+    font-size: 0.7rem;
+}
+
+/* Feature Cards */
+.feature-card {
+    background: rgba(20, 30, 50, 0.7);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--card-radius);
+    padding: 1.5rem;
+    text-align: center;
+}
+.feature-card .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+.feature-card h3 { color: var(--text-primary); font-size: 1rem; }
+.feature-card p { color: var(--text-muted); font-size: 0.8rem; }
+
+/* Pricing Card */
+.pricing-card {
+    background: rgba(20, 30, 50, 0.7);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--card-radius);
+    padding: 2rem;
+    text-align: center;
+}
+.pricing-card .badge-top {
+    background: linear-gradient(135deg, var(--cyan), var(--lime));
+    color: #0B0E14;
+    padding: 0.3rem 1rem;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    display: inline-block;
+    margin-bottom: 0.5rem;
+}
+.pricing-card .price {
+    font-family: var(--font-display);
+    font-size: 3.5rem;
+    font-weight: 700;
+    color: var(--cyan);
+}
+.pricing-card .period { color: var(--text-muted); font-size: 0.8rem; }
+.pricing-card .feature-item {
+    padding: 0.4rem 0;
+    color: var(--text-secondary);
+}
+.pricing-card .feature-item::before { content: "✓ "; color: var(--lime); }
+
+/* Form elements — BRIGHTER */
+div[data-testid="stTextInput"] input {
+    background: rgba(0, 0, 0, 0.3) !important;
+    border: 1px solid var(--border-glass) !important;
+    border-radius: 8px !important;
+    color: var(--text-primary) !important;
+    padding: 0.6rem 1rem !important;
+}
+div[data-testid="stTextInput"] input:focus {
+    border-color: var(--cyan) !important;
+    box-shadow: 0 0 20px var(--cyan-glow) !important;
+}
+div[data-testid="stTextInput"] label {
+    color: var(--text-secondary) !important;
+    font-family: var(--font-mono) !important;
+    font-size: 0.6rem !important;
+}
+
+/* Buttons */
 .stButton button, div[data-testid="stFormSubmitButton"] button {
     background: linear-gradient(135deg, var(--cyan), #0099CC) !important;
-    color: var(--bg-deep) !important;
+    color: #0B0E14 !important;
     border: none !important;
     border-radius: 8px !important;
     font-family: var(--font-mono) !important;
@@ -501,36 +572,44 @@ section[data-testid="stSidebar"] {
     font-size: 0.7rem !important;
     letter-spacing: 0.08em !important;
     text-transform: uppercase !important;
-    padding: 0.5rem 1.5rem !important;
+    padding: 0.6rem 1.5rem !important;
     box-shadow: 0 0 20px var(--cyan-glow) !important;
 }
-.stButton button:hover {
+.stButton button:hover, div[data-testid="stFormSubmitButton"] button:hover {
     transform: translateY(-2px) !important;
     box-shadow: 0 0 40px var(--cyan-glow) !important;
 }
+
+/* Metrics */
 div[data-testid="metric-container"] {
-    background: var(--bg-card) !important;
+    background: rgba(20, 30, 50, 0.7) !important;
     border: 1px solid var(--border-glass) !important;
     border-radius: var(--card-radius) !important;
     padding: 0.8rem 1rem !important;
 }
 div[data-testid="metric-label"] {
+    color: var(--text-muted) !important;
     font-family: var(--font-mono) !important;
     font-size: 0.5rem !important;
-    color: var(--text-muted) !important;
     text-transform: uppercase !important;
-    letter-spacing: 0.08em !important;
 }
 div[data-testid="metric-value"] {
+    color: var(--text-primary) !important;
     font-family: var(--font-display) !important;
     font-size: 1.2rem !important;
     font-weight: 700 !important;
-    color: var(--text-primary) !important;
 }
+
+/* Sidebar */
 section[data-testid="stSidebar"] {
     background: var(--bg-surface) !important;
     border-right: 1px solid var(--border-glass) !important;
 }
+section[data-testid="stSidebar"] .stMarkdown {
+    color: var(--text-secondary) !important;
+}
+
+/* Tabs */
 .stTabs [data-baseweb="tab-list"] {
     gap: 0 !important;
     border-bottom: 1px solid var(--border-glass) !important;
@@ -547,13 +626,60 @@ section[data-testid="stSidebar"] {
     color: var(--cyan) !important;
     border-bottom: 2px solid var(--cyan) !important;
 }
-div[data-testid="stTextInput"] input {
-    background: rgba(0,0,0,0.3) !important;
+
+/* Select */
+.stSelectbox > div > div {
+    background: rgba(0, 0, 0, 0.3) !important;
     border: 1px solid var(--border-glass) !important;
     border-radius: 8px !important;
     color: var(--text-primary) !important;
 }
+.stSelectbox label {
+    color: var(--text-secondary) !important;
+}
+
+/* Slider */
+.stSlider div[data-baseweb="slider"] {
+    background: var(--border-glass) !important;
+}
+.stSlider div[data-baseweb="slider"] div {
+    background: var(--cyan) !important;
+    box-shadow: 0 0 15px var(--cyan-glow) !important;
+}
+
+/* Alerts */
+.stAlert {
+    background: rgba(20, 30, 50, 0.8) !important;
+    border: 1px solid var(--border-glass) !important;
+    border-radius: var(--card-radius) !important;
+}
+.stAlert .stMarkdown {
+    color: var(--text-secondary) !important;
+}
+
+/* Hide Streamlit branding */
 #MainMenu, footer, header { visibility: hidden !important; display: none !important; }
+
+/* Expander */
+details {
+    background: rgba(20, 30, 50, 0.7) !important;
+    border: 1px solid var(--border-glass) !important;
+    border-radius: 8px !important;
+    padding: 0.5rem !important;
+}
+details summary {
+    color: var(--text-secondary) !important;
+    font-family: var(--font-mono) !important;
+    font-size: 0.65rem !important;
+    cursor: pointer !important;
+}
+details summary:hover { color: var(--cyan) !important; }
+
+/* Info/Warning/Success/Error */
+.stInfo { border-left: 3px solid var(--cyan) !important; }
+.stSuccess { border-left: 3px solid var(--lime) !important; }
+.stWarning { border-left: 3px solid var(--orange) !important; }
+.stError { border-left: 3px solid var(--red) !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -562,7 +688,7 @@ div[data-testid="stTextInput"] input {
 # ─────────────────────────────────────────────────────────────
 LANGUAGES = {
     "en": {
-        "title": "📊 Cyber Betting Terminal",
+        "title": "⚡ Cyber Betting Terminal",
         "subtitle": "Real-time Arbitrage & EV Scanner",
         "live": "LIVE",
         "active_arbs": "Active Arbs",
@@ -590,10 +716,41 @@ LANGUAGES = {
         "footer": f"{COMPANY_NAME} · {DOMAIN} · {YEAR}",
         "lang_en": "🇬🇧 EN",
         "lang_fr": "🇫🇷 FR",
-        "lang_es": "🇪🇸 ES"
+        "lang_es": "🇪🇸 ES",
+        "scanner_title": "🔍 Live Arbitrage Scanner",
+        "mode": "Mode",
+        "ev_mode": "EV (Value Bets)",
+        "arbitrage_mode": "Arbitrage",
+        "both_mode": "Both",
+        "min_ev": "Min EV %",
+        "stake_label": "Stake ($)",
+        "scan_btn": "🔍 Scan Now",
+        "best_ev_bets": "🎯 Best EV Bets",
+        "manual_title": "📝 Manual Odds Input",
+        "sport": "Sport",
+        "home_team": "Home Team",
+        "away_team": "Away Team",
+        "home_odds": "Home Odds",
+        "draw_odds": "Draw Odds",
+        "away_odds": "Away Odds",
+        "your_bet": "Your Bet",
+        "your_stake": "Your Stake ($)",
+        "add_bet": "➕ Add Bet",
+        "history_title": "📊 Betting History",
+        "update_result": "✏️ Update Result",
+        "select_bet": "Select Bet",
+        "result": "Result",
+        "return_amount": "Return ($)",
+        "update_btn": "Update",
+        "slip_title": "📄 Paper Slip Generator",
+        "download_slip": "📥 Download Slip",
+        "no_bets": "No bets yet. Start scanning for opportunities!",
+        "no_pending": "No pending bets.",
+        "no_pending_slips": "No pending bets available. Scan for opportunities first!",
+        "bet_added": "✅ Bet added: {home} vs {away} — {outcome} @ {odds}"
     },
     "fr": {
-        "title": "📊 Terminal de Paris Cyber",
+        "title": "⚡ Terminal de Paris Cyber",
         "subtitle": "Scanner d'Arbitrage et EV en temps réel",
         "live": "EN DIRECT",
         "active_arbs": "Arbs actifs",
@@ -601,7 +758,7 @@ LANGUAGES = {
         "bankroll": "Bankroll",
         "total_bets": "Total des paris",
         "signup_title": "🚀 Créez Votre Compte",
-        "signup_subtitle": "Commencez votre **essai gratuit de 7 jours**. Aucune carte de crédit requise.",
+        "signup_subtitle": "Commencez votre **essai gratuit de 7 jours**.",
         "login_title": "🔐 Bon Retour",
         "free_trial": "🚀 Essai Gratuit",
         "free_trial_note": "🆓 Essai gratuit de 7 jours · Puis 1,99 $/mois",
@@ -616,15 +773,46 @@ LANGUAGES = {
         "password_mismatch": "Les mots de passe ne correspondent pas.",
         "password_short": "Le mot de passe doit contenir au moins 6 caractères.",
         "account_created": "✅ Compte créé! Vous pouvez maintenant vous connecter.",
-        "email_exists": "Courriel déjà enregistré. Veuillez vous connecter.",
+        "email_exists": "Courriel déjà enregistré.",
         "login_error": "Courriel ou mot de passe incorrect.",
         "footer": f"{COMPANY_NAME} · {DOMAIN} · {YEAR}",
         "lang_en": "🇬🇧 EN",
         "lang_fr": "🇫🇷 FR",
-        "lang_es": "🇪🇸 ES"
+        "lang_es": "🇪🇸 ES",
+        "scanner_title": "🔍 Scanner en direct",
+        "mode": "Mode",
+        "ev_mode": "EV (Paris de valeur)",
+        "arbitrage_mode": "Arbitrage",
+        "both_mode": "Les deux",
+        "min_ev": "EV min. %",
+        "stake_label": "Mise ($)",
+        "scan_btn": "🔍 Scanner",
+        "best_ev_bets": "🎯 Meilleurs paris EV",
+        "manual_title": "📝 Saisie manuelle",
+        "sport": "Sport",
+        "home_team": "Équipe domicile",
+        "away_team": "Équipe extérieure",
+        "home_odds": "Cote domicile",
+        "draw_odds": "Cote nul",
+        "away_odds": "Cote extérieur",
+        "your_bet": "Votre pari",
+        "your_stake": "Votre mise ($)",
+        "add_bet": "➕ Ajouter",
+        "history_title": "📊 Historique",
+        "update_result": "✏️ Mettre à jour",
+        "select_bet": "Sélectionner",
+        "result": "Résultat",
+        "return_amount": "Retour ($)",
+        "update_btn": "Mettre à jour",
+        "slip_title": "📄 Générateur de bulletin",
+        "download_slip": "📥 Télécharger",
+        "no_bets": "Aucun pari pour l'instant.",
+        "no_pending": "Aucun pari en attente.",
+        "no_pending_slips": "Aucun pari en attente.",
+        "bet_added": "✅ Pari ajouté: {home} vs {away} — {outcome} @ {odds}"
     },
     "es": {
-        "title": "📊 Terminal de Apuestas Cyber",
+        "title": "⚡ Terminal de Apuestas Cyber",
         "subtitle": "Escáner de Arbitraje y EV en tiempo real",
         "live": "EN VIVO",
         "active_arbs": "Arbs activos",
@@ -632,7 +820,7 @@ LANGUAGES = {
         "bankroll": "Bankroll",
         "total_bets": "Total apuestas",
         "signup_title": "🚀 Crea Tu Cuenta",
-        "signup_subtitle": "Comienza tu **prueba gratuita de 7 días**. Sin tarjeta de crédito.",
+        "signup_subtitle": "Comienza tu **prueba gratuita de 7 días**.",
         "login_title": "🔐 Bienvenido de Vuelta",
         "free_trial": "🚀 Prueba Gratis",
         "free_trial_note": "🆓 Prueba gratis de 7 días · Luego $1.99/mes",
@@ -646,13 +834,44 @@ LANGUAGES = {
         "signup_error": "Todos los campos son obligatorios.",
         "password_mismatch": "Las contraseñas no coinciden.",
         "password_short": "La contraseña debe tener al menos 6 caracteres.",
-        "account_created": "✅ ¡Cuenta creada! Ahora puedes iniciar sesión.",
-        "email_exists": "Correo ya registrado. Por favor inicia sesión.",
+        "account_created": "✅ ¡Cuenta creada!",
+        "email_exists": "Correo ya registrado.",
         "login_error": "Correo o contraseña incorrectos.",
         "footer": f"{COMPANY_NAME} · {DOMAIN} · {YEAR}",
         "lang_en": "🇬🇧 EN",
         "lang_fr": "🇫🇷 FR",
-        "lang_es": "🇪🇸 ES"
+        "lang_es": "🇪🇸 ES",
+        "scanner_title": "🔍 Escáner en Vivo",
+        "mode": "Modo",
+        "ev_mode": "EV (Apuestas de valor)",
+        "arbitrage_mode": "Arbitraje",
+        "both_mode": "Ambos",
+        "min_ev": "VE mín. %",
+        "stake_label": "Apuesta ($)",
+        "scan_btn": "🔍 Escanear",
+        "best_ev_bets": "🎯 Mejores apuestas EV",
+        "manual_title": "📝 Ingreso manual",
+        "sport": "Deporte",
+        "home_team": "Equipo local",
+        "away_team": "Equipo visitante",
+        "home_odds": "Cuota local",
+        "draw_odds": "Cuota empate",
+        "away_odds": "Cuota visitante",
+        "your_bet": "Tu apuesta",
+        "your_stake": "Tu apuesta ($)",
+        "add_bet": "➕ Agregar",
+        "history_title": "📊 Historial",
+        "update_result": "✏️ Actualizar",
+        "select_bet": "Seleccionar",
+        "result": "Resultado",
+        "return_amount": "Retorno ($)",
+        "update_btn": "Actualizar",
+        "slip_title": "📄 Generador de Boletos",
+        "download_slip": "📥 Descargar",
+        "no_bets": "Aún no hay apuestas.",
+        "no_pending": "No hay apuestas pendientes.",
+        "no_pending_slips": "No hay apuestas pendientes.",
+        "bet_added": "✅ Apuesta agregada: {home} vs {away} — {outcome} @ {odds}"
     }
 }
 
@@ -678,17 +897,19 @@ def landing_page():
             st.session_state.lang = "es"
             st.rerun()
     
+    # Hero
     st.markdown(f"""
-    <div style="text-align:center; padding:3rem 2rem; background:var(--bg-surface); border-radius:20px; border:1px solid var(--border-glass); margin-bottom:2rem;">
-        <h1 style="font-family:var(--font-display); font-size:2.8rem; font-weight:800; background:linear-gradient(135deg, var(--cyan), var(--lime)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:0.5rem;">⚡ {t['title']}</h1>
-        <p style="color:var(--text-secondary); font-size:1.1rem;">{t['subtitle']}</p>
+    <div class="hero-section">
+        <h1>{t['title']}</h1>
+        <p>{t['subtitle']}</p>
         <div style="margin-top:1rem; display:flex; justify-content:center; gap:0.5rem; flex-wrap:wrap;">
-            <span style="background:rgba(0,243,255,0.06); border:1px solid rgba(0,243,255,0.1); padding:0.3rem 1rem; border-radius:20px; color:var(--cyan); font-size:0.7rem;">🆓 7-day free trial</span>
-            <span style="background:rgba(57,255,20,0.04); border:1px solid rgba(57,255,20,0.06); padding:0.3rem 1rem; border-radius:20px; color:var(--lime); font-size:0.7rem;">⚡ {t['live']}</span>
+            <span class="badge">🆓 7-day free trial</span>
+            <span class="badge-live">⚡ {t['live']}</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
     
+    # Features
     col1, col2, col3 = st.columns(3)
     features = [
         ("🎯", "EV Scanner", "Find positive expected value bets automatically"),
@@ -698,35 +919,36 @@ def landing_page():
     for col, (icon, title, desc) in zip([col1, col2, col3], features):
         with col:
             st.markdown(f"""
-            <div style="background:var(--bg-card); backdrop-filter:blur(20px); border:1px solid var(--border-glass); border-radius:var(--card-radius); padding:1.5rem; text-align:center;">
-                <div style="font-size:2.5rem; margin-bottom:0.5rem;">{icon}</div>
-                <h3 style="color:var(--text-primary); font-size:1rem;">{title}</h3>
-                <p style="color:var(--text-muted); font-size:0.8rem;">{desc}</p>
+            <div class="feature-card">
+                <div class="icon">{icon}</div>
+                <h3>{title}</h3>
+                <p>{desc}</p>
             </div>
             """, unsafe_allow_html=True)
     
     st.markdown("---")
     
+    # Pricing
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
-        st.markdown("""
-        <div style="background:var(--bg-card); border:1px solid var(--border-glass); border-radius:var(--card-radius); padding:2rem; text-align:center;">
-            <div style="background:linear-gradient(135deg, var(--cyan), var(--lime)); color:#0B0E14; padding:0.3rem 1rem; border-radius:20px; font-size:0.7rem; font-weight:700; display:inline-block; margin-bottom:0.5rem;">🔥 Most Popular</div>
+        st.markdown(f"""
+        <div class="pricing-card">
+            <div class="badge-top">🔥 Most Popular</div>
             <h2 style="color:var(--text-primary); margin:0;">Monthly</h2>
-            <div style="font-family:var(--font-display); font-size:3.5rem; font-weight:700; color:var(--cyan);">$1.99</div>
-            <div style="color:var(--text-muted); font-size:0.8rem;">per month</div>
+            <div class="price">$1.99</div>
+            <div class="period">per month</div>
             <div style="text-align:left; margin:1.5rem 0;">
-                <div style="padding:0.4rem 0; color:var(--text-secondary);">✓ Unlimited EV Scans</div>
-                <div style="padding:0.4rem 0; color:var(--text-secondary);">✓ Arbitrage Detection</div>
-                <div style="padding:0.4rem 0; color:var(--text-secondary);">✓ Paper Slip Generator</div>
-                <div style="padding:0.4rem 0; color:var(--text-secondary);">✓ AI Analysis</div>
-                <div style="padding:0.4rem 0; color:var(--text-secondary);">✓ No commitment</div>
+                <div class="feature-item">Unlimited EV Scans</div>
+                <div class="feature-item">Arbitrage Detection</div>
+                <div class="feature-item">Paper Slip Generator</div>
+                <div class="feature-item">AI Analysis</div>
+                <div class="feature-item">No commitment</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
         
         if st.button(t['free_trial'], use_container_width=True, type="primary"):
-            st.session_state.show_signup = True
+            st.session_state.page = "signup"
             st.rerun()
         
         st.markdown(f"""
@@ -781,14 +1003,14 @@ def signup_page():
             else:
                 if create_user(email, password, name):
                     st.success(t['account_created'])
-                    st.session_state.show_login = True
+                    st.session_state.page = "login"
                     st.rerun()
                 else:
                     st.error(t['email_exists'])
     
     st.markdown("---")
     if st.button(t['already_account'], use_container_width=True):
-        st.session_state.show_login = True
+        st.session_state.page = "login"
         st.rerun()
 
 # ─────────────────────────────────────────────────────────────
@@ -832,7 +1054,7 @@ def login_page():
     
     st.markdown("---")
     if st.button(t['create_account'], use_container_width=True):
-        st.session_state.show_signup = True
+        st.session_state.page = "signup"
         st.rerun()
 
 # ─────────────────────────────────────────────────────────────
@@ -863,11 +1085,11 @@ def dashboard():
             st.session_state.lang = "es"
             st.rerun()
     
-    # ─── TOP NAV ─────────────────────────────────────────────
+    # Top Nav
     st.markdown(f"""
     <div class="terminal-nav">
         <div class="terminal-logo">
-            <span class="icon">⚡</span>
+            <span style="font-size:1.4rem;">⚡</span>
             <div>
                 <span class="brand">CYBER TERMINAL</span>
                 <div class="sub">{st.session_state.user_name} · {'ADMIN' if st.session_state.is_admin else 'USER'}</div>
@@ -885,7 +1107,7 @@ def dashboard():
     </div>
     """, unsafe_allow_html=True)
     
-    # ─── KPI GRID ─────────────────────────────────────────────
+    # KPI Grid
     bets = get_user_bets(st.session_state.user_id)
     
     if bets:
@@ -932,7 +1154,7 @@ def dashboard():
     
     st.markdown("---")
     
-    # ─── TABS ──────────────────────────────────────────────────
+    # Tabs
     tab1, tab2, tab3, tab4 = st.tabs([
         "🎯 Scanner",
         "📝 Manual",
@@ -940,19 +1162,19 @@ def dashboard():
         "📄 Slip"
     ])
     
-    # ─── TAB 1: SCANNER ──────────────────────────────────────
+    # Scanner
     with tab1:
-        st.markdown("### 🔍 Live Arbitrage Scanner")
+        st.markdown(f"### {t['scanner_title']}")
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            scan_mode = st.selectbox("Mode", ["EV (Value Bets)", "Arbitrage", "Both"])
+            scan_mode = st.selectbox(t['mode'], [t['ev_mode'], t['arbitrage_mode'], t['both_mode']])
         with col2:
-            min_ev = st.slider("Min EV %", 1, 20, 5, 1)
+            min_ev = st.slider(t['min_ev'], 1, 20, 5, 1)
         with col3:
-            target_stake = st.number_input("Stake ($)", min_value=10, value=100, step=10)
+            target_stake = st.number_input(t['stake_label'], min_value=10, value=100, step=10)
         
-        if st.button("🔍 Scan Now", use_container_width=True, type="primary"):
+        if st.button(t['scan_btn'], use_container_width=True, type="primary"):
             with st.spinner("Scanning 70+ bookmakers..."):
                 sample_bets = [
                     {'match': 'Arsenal vs Coventry', 'outcome': 'Draw', 'odds': 8.20, 'ev_percent': 8.0, 'true_prob': 13.2, 'stake': 5.00, 'potential_return': 41.00, 'book': 'Betfair'},
@@ -981,7 +1203,7 @@ def dashboard():
                 st.rerun()
         
         if 'scan_results' in st.session_state and st.session_state.scan_results:
-            st.markdown("### 🎯 Best EV Bets")
+            st.markdown(f"### {t['best_ev_bets']}")
             
             total_stake = 0
             total_return = 0
@@ -1020,26 +1242,26 @@ def dashboard():
             col3.metric("Expected Return", f"${total_return:.2f}")
             col4.metric("Expected Profit", f"${total_return - total_stake:.2f}")
     
-    # ─── TAB 2: MANUAL ──────────────────────────────────────
+    # Manual
     with tab2:
-        st.markdown("### 📝 Manual Odds Input")
+        st.markdown(f"### {t['manual_title']}")
         
         with st.form("manual_form"):
             col1, col2, col3 = st.columns(3)
             with col1:
-                sport = st.selectbox("Sport", ["Soccer", "Hockey", "Basketball", "Football", "Baseball", "Tennis"])
-                home_team = st.text_input("Home Team")
+                sport = st.selectbox(t['sport'], ["Soccer", "Hockey", "Basketball", "Football", "Baseball", "Tennis"])
+                home_team = st.text_input(t['home_team'])
             with col2:
-                away_team = st.text_input("Away Team")
-                home_odds = st.number_input("Home Odds", min_value=1.01, step=0.01, value=2.50)
+                away_team = st.text_input(t['away_team'])
+                home_odds = st.number_input(t['home_odds'], min_value=1.01, step=0.01, value=2.50)
             with col3:
-                draw_odds = st.number_input("Draw Odds", min_value=1.01, step=0.01, value=3.20)
-                away_odds = st.number_input("Away Odds", min_value=1.01, step=0.01, value=2.80)
+                draw_odds = st.number_input(t['draw_odds'], min_value=1.01, step=0.01, value=3.20)
+                away_odds = st.number_input(t['away_odds'], min_value=1.01, step=0.01, value=2.80)
             
-            outcome = st.selectbox("Your Bet", ["Home Win", "Draw", "Away Win"])
-            stake = st.number_input("Your Stake ($)", min_value=1.0, step=1.0, value=10.0)
+            outcome = st.selectbox(t['your_bet'], ["Home Win", "Draw", "Away Win"])
+            stake = st.number_input(t['your_stake'], min_value=1.0, step=1.0, value=10.0)
             
-            if st.form_submit_button("➕ Add Bet", use_container_width=True, type="primary"):
+            if st.form_submit_button(t['add_bet'], use_container_width=True, type="primary"):
                 if home_team and away_team and st.session_state.user_id:
                     odds_map = {"Home Win": home_odds, "Draw": draw_odds, "Away Win": away_odds}
                     selected_odds = odds_map.get(outcome, 0)
@@ -1062,12 +1284,12 @@ def dashboard():
                         'profit_loss': 0
                     })
                     
-                    st.success(f"✅ Bet added: {home_team} vs {away_team} — {outcome} @ {selected_odds}")
+                    st.success(t['bet_added'].format(home=home_team, away=away_team, outcome=outcome, odds=selected_odds))
                     st.rerun()
     
-    # ─── TAB 3: HISTORY ──────────────────────────────────────
+    # History
     with tab3:
-        st.markdown("### 📊 Betting History")
+        st.markdown(f"### {t['history_title']}")
         
         bets = get_user_bets(st.session_state.user_id)
         
@@ -1103,18 +1325,18 @@ def dashboard():
             st.dataframe(df, use_container_width=True)
             
             st.markdown("---")
-            st.markdown("### ✏️ Update Result")
+            st.markdown(f"### {t['update_result']}")
             
             pending = [b for b in bets if b[10] == 'Pending']
             if pending:
                 options = {f"ID {b[0]}: {b[4]} vs {b[5]}": b[0] for b in pending}
-                selected = st.selectbox("Select Bet", list(options.keys()))
+                selected = st.selectbox(t['select_bet'], list(options.keys()))
                 bet_id = options[selected]
                 
-                result = st.selectbox("Result", ["Win", "Loss"])
-                return_amount = st.number_input("Return ($)", min_value=0.0, step=0.01)
+                result = st.selectbox(t['result'], ["Win", "Loss"])
+                return_amount = st.number_input(t['return_amount'], min_value=0.0, step=0.01)
                 
-                if st.button("Update", use_container_width=True, type="primary"):
+                if st.button(t['update_btn'], use_container_width=True, type="primary"):
                     stake = [b[8] for b in bets if b[0] == bet_id][0]
                     if result == "Win":
                         profit_loss = return_amount - stake
@@ -1125,13 +1347,13 @@ def dashboard():
                     st.success("✅ Bet updated!")
                     st.rerun()
             else:
-                st.info("No pending bets.")
+                st.info(t['no_pending'])
         else:
-            st.info("No bets yet. Start scanning for opportunities!")
+            st.info(t['no_bets'])
     
-    # ─── TAB 4: SLIP ─────────────────────────────────────────
+    # Slip
     with tab4:
-        st.markdown("### 📄 Paper Slip Generator")
+        st.markdown(f"### {t['slip_title']}")
         
         bets = get_user_bets(st.session_state.user_id)
         pending = [b for b in bets if b[10] == 'Pending']
@@ -1171,24 +1393,22 @@ Total Stake: ${total_stake:.2f}
                 st.code(slip_text, language="text")
                 
                 st.download_button(
-                    label="📥 Download Slip",
+                    label=t['download_slip'],
                     data=slip_text,
                     file_name=f"slip_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
                     mime="text/plain",
                     use_container_width=True
                 )
         else:
-            st.info("No pending bets available. Scan for opportunities first!")
+            st.info(t['no_pending_slips'])
 
 # ─────────────────────────────────────────────────────────────
 # SESSION STATE
 # ─────────────────────────────────────────────────────────────
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
-if 'show_signup' not in st.session_state:
-    st.session_state.show_signup = False
-if 'show_login' not in st.session_state:
-    st.session_state.show_login = False
+if 'page' not in st.session_state:
+    st.session_state.page = "landing"
 if 'scan_results' not in st.session_state:
     st.session_state.scan_results = []
 if 'user_id' not in st.session_state:
@@ -1203,15 +1423,12 @@ if 'is_admin' not in st.session_state:
 # ─────────────────────────────────────────────────────────────
 init_db()
 
-query_params = st.query_params
-page = query_params.get('page', ['landing'])[0]
-
 if st.session_state.authenticated:
     dashboard()
 else:
-    if page == 'signup' or st.session_state.show_signup:
+    if st.session_state.page == "signup":
         signup_page()
-    elif page == 'login' or st.session_state.show_login:
+    elif st.session_state.page == "login":
         login_page()
     else:
         landing_page()
@@ -1240,6 +1457,7 @@ if st.session_state.authenticated:
             for key in ['authenticated', 'user_email', 'user_name', 'user_id', 'is_admin']:
                 if key in st.session_state:
                     del st.session_state[key]
+            st.session_state.page = "landing"
             st.rerun()
         
         st.markdown(f"""
