@@ -42,7 +42,7 @@ with st.sidebar:
     min_arb_profit = st.slider("Min. Arbitrage Profit %", 0.1, 5.0, 0.5, 0.1)
     kelly_fraction = st.slider("Kelly Fraction", 0.1, 0.5, 0.25, 0.05)
     st.markdown("---")
-    st.caption("v5.2 · Only Solutions Inc.")
+    st.caption("v6.0 · Only Solutions Inc.")
 
 # ─────────────────────────────────────────────────────────────
 # TELEGRAM ALERT FUNCTION (PASSIVE)
@@ -1058,6 +1058,9 @@ with tab5:
         else:
             st.info("No pending bets to update.")
 
+# ─────────────────────────────────────────────────────────────
+# SCANNER TAB — COMPLETELY REWRITTEN TO AVOID KEY ERRORS
+# ─────────────────────────────────────────────────────────────
 with tab6:
     st.markdown("### 🔍 Live Arbitrage + EV Scanner")
     st.markdown("Scan multiple sportsbooks for arbitrage or positive EV opportunities.")
@@ -1101,30 +1104,29 @@ with tab6:
             else:
                 sports = [scan_sport]
             
-            debug_info = []
             all_opportunities = []
             total_events = 0
             total_books = 0
+            
+            # Track stats per sport using simple variables
+            sport_stats = []
             
             for sport in sports[:10]:
                 events = scanner.fetch_live_odds(sport)
                 total_events += len(events)
                 
-                # FIX: Initialize ALL keys at the start
-                sport_debug = {
-                    'sport': sport,
-                    'events_found': len(events),
-                    'books_found': 0,
-                    'arbitrage_found': 0,
-                    'ev_bets_found': 0
-                }
+                # Simple counters for this sport
+                sport_events = len(events)
+                sport_books = 0
+                sport_arbs = 0
+                sport_ev = 0
                 
                 for event in events:
                     if 'bookmakers' not in event:
                         continue
                     
                     total_books += len(event.get('bookmakers', []))
-                    sport_debug['books_found'] += len(event.get('bookmakers', []))
+                    sport_books += len(event.get('bookmakers', []))
                     
                     for book in event.get('bookmakers', []):
                         for market in book.get('markets', []):
@@ -1164,7 +1166,7 @@ with tab6:
                                                     )
                                                 )
                                             })
-                                            sport_debug['arbitrage_found'] += 1
+                                            sport_arbs += 1
                                     
                                     # Check for EV bets
                                     if scan_mode in ["EV (Value Bets)", "Both"]:
@@ -1211,13 +1213,20 @@ with tab6:
                                                         'potential_return': round(stake * odds_val, 2),
                                                         'book': book.get('key', '')
                                                     })
-                                                    sport_debug['ev_bets_found'] += 1
+                                                    sport_ev += 1
                 
-                debug_info.append(sport_debug)
+                # Store stats for this sport
+                sport_stats.append({
+                    'sport': sport,
+                    'events': sport_events,
+                    'books': sport_books,
+                    'arbs': sport_arbs,
+                    'ev': sport_ev
+                })
             
             st.session_state.scanner_results = all_opportunities
-            st.session_state.scanner_debug = {
-                'debug_info': debug_info,
+            st.session_state.scanner_stats = sport_stats
+            st.session_state.scanner_totals = {
                 'total_events': total_events,
                 'total_books': total_books,
                 'total_opportunities': len(all_opportunities)
@@ -1230,8 +1239,10 @@ with tab6:
                 send_telegram_alert(f"🔔 New opportunities found!\nEV Bets: {ev_count}\nArbitrage: {arb_count}")
     
     # Display debug info
-    if show_debug and 'scanner_debug' in st.session_state:
-        debug = st.session_state.scanner_debug
+    if show_debug and 'scanner_stats' in st.session_state:
+        stats = st.session_state.scanner_stats
+        totals = st.session_state.scanner_totals
+        
         st.markdown("---")
         st.markdown("### 📊 Scan Summary")
         
@@ -1239,22 +1250,22 @@ with tab6:
         ev_count = len([o for o in st.session_state.scanner_results if o.get('type') == 'EV Bet'])
         
         col1, col2, col3, col4, col5 = st.columns(5)
-        col1.metric("Sports Scanned", len(debug['debug_info']))
-        col2.metric("Events Found", debug['total_events'])
-        col3.metric("Books Checked", debug['total_books'])
+        col1.metric("Sports Scanned", len(stats))
+        col2.metric("Events Found", totals['total_events'])
+        col3.metric("Books Checked", totals['total_books'])
         col4.metric("Arbitrage", arb_count)
         col5.metric("EV Bets", ev_count)
         
-        if debug['total_events'] == 0:
+        if totals['total_events'] == 0:
             st.warning("⚠️ No events found. Check your API key or try a different sport.")
         
         with st.expander("📋 Detailed Scan Results"):
-            for sport_debug in debug['debug_info']:
-                st.markdown(f"**{sport_debug['sport']}**")
-                st.markdown(f"- Events: {sport_debug['events_found']}")
-                st.markdown(f"- Books: {sport_debug['books_found']}")
-                st.markdown(f"- Arbs: {sport_debug['arbitrage_found']}")
-                st.markdown(f"- EV Bets: {sport_debug['ev_bets_found']}")
+            for stat in stats:
+                st.markdown(f"**{stat['sport']}**")
+                st.markdown(f"- Events: {stat['events']}")
+                st.markdown(f"- Books: {stat['books']}")
+                st.markdown(f"- Arbs: {stat['arbs']}")
+                st.markdown(f"- EV Bets: {stat['ev']}")
                 st.markdown("---")
     
     # Display scanner results
@@ -1325,7 +1336,7 @@ with tab6:
             col3.metric("Expected Return", f"${total_ev_return:.2f}")
             col4.metric("Expected Profit", f"${total_ev_return - total_ev_stake:.2f}")
             
-    elif 'scanner_debug' in st.session_state:
+    elif 'scanner_stats' in st.session_state:
         st.info("No opportunities found. Try:")
         st.markdown("""
         - **Lowering the Min. EV %** (try 3-4% instead of 5%)
