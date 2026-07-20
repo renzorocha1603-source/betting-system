@@ -35,10 +35,10 @@ with st.sidebar:
     min_ev = st.slider("Min. EV %", 1, 25, 5, 1)
     kelly_fraction = st.slider("Kelly Fraction", 0.1, 0.5, 0.25, 0.05)
     st.markdown("---")
-    st.caption("v4.1 · Only Solutions Inc.")
+    st.caption("v4.2 · Only Solutions Inc.")
 
 # ─────────────────────────────────────────────────────────────
-# DEEPSEEK AI FUNCTION — FIXED TO CHOOSE BEST BET
+# DEEPSEEK AI FUNCTION
 # ─────────────────────────────────────────────────────────────
 def ask_deepseek(prompt: str) -> str:
     """Get analysis from DeepSeek AI using hardcoded key"""
@@ -152,7 +152,7 @@ def add_bet(bet_data):
 def get_all_bets():
     conn = sqlite3.connect('betting_history.db')
     c = conn.cursor()
-    c.execute('SELECT id, timestamp, sport, home_team, away_team, bet_type, outcome, odds, stake, ev_percent, true_prob, implied_prob, result, return, profit_loss, notes FROM bets ORDER BY timestamp DESC')
+    c.execute('SELECT * FROM bets ORDER BY timestamp DESC')
     rows = c.fetchall()
     conn.close()
     return rows
@@ -644,18 +644,31 @@ with tab5:
     if bets:
         data = []
         for bet in bets:
+            # Safely access each field
+            bet_id = bet[0] if len(bet) > 0 else 0
+            timestamp = bet[1][:16] if len(bet) > 1 and bet[1] else ''
+            sport = bet[2] if len(bet) > 2 else ''
+            home = bet[3] if len(bet) > 3 else ''
+            away = bet[4] if len(bet) > 4 else ''
+            outcome = bet[6] if len(bet) > 6 else ''
+            odds = bet[7] if len(bet) > 7 else 0
+            stake = f"${bet[8]:.2f}" if len(bet) > 8 and bet[8] else '$0.00'
+            ev = f"{bet[9]:.1f}%" if len(bet) > 9 and bet[9] else '0.0%'
+            result = bet[12] if len(bet) > 12 else 'Pending'
+            pl = f"${bet[14]:.2f}" if len(bet) > 14 and bet[14] != 0 else "Pending"
+            
             data.append({
-                'ID': bet[0],
-                'Timestamp': bet[1][:16] if len(bet) > 1 else '',
-                'Sport': bet[2] if len(bet) > 2 else '',
-                'Home': bet[3] if len(bet) > 3 else '',
-                'Away': bet[4] if len(bet) > 4 else '',
-                'Outcome': bet[6] if len(bet) > 6 else '',
-                'Odds': bet[7] if len(bet) > 7 else 0,
-                'Stake': f"${bet[8]:.2f}" if len(bet) > 8 else '',
-                'EV%': f"{bet[9]:.1f}%" if len(bet) > 9 else '',
-                'Result': bet[12] if len(bet) > 12 else 'Pending',
-                'P/L': f"${bet[14]:.2f}" if len(bet) > 14 and bet[14] != 0 else "Pending"
+                'ID': bet_id,
+                'Timestamp': timestamp,
+                'Sport': sport,
+                'Home': home,
+                'Away': away,
+                'Outcome': outcome,
+                'Odds': odds,
+                'Stake': stake,
+                'EV%': ev,
+                'Result': result,
+                'P/L': pl
             })
         
         df = pd.DataFrame(data)
@@ -664,21 +677,38 @@ with tab5:
         st.markdown("---")
         st.subheader("✏️ Update Bet Result")
         
-        pending_bets = [b for b in bets if len(b) > 12 and b[12] == 'Pending']
+        # Get pending bets safely
+        pending_bets = []
+        for b in bets:
+            if len(b) > 12 and b[12] == 'Pending':
+                home_name = b[3] if len(b) > 3 else ''
+                away_name = b[4] if len(b) > 4 else ''
+                outcome_name = b[6] if len(b) > 6 else ''
+                pending_bets.append({
+                    'id': b[0],
+                    'label': f"ID {b[0]}: {home_name} vs {away_name} - {outcome_name}"
+                })
+        
         if pending_bets:
-            bet_options = [f"ID {b[0]}: {b[3] if len(b) > 3 else ''} vs {b[4] if len(b) > 4 else ''} - {b[6] if len(b) > 6 else ''}" for b in pending_bets]
-            selected = st.selectbox("Select Bet to Update", bet_options)
-            selected_id = int(selected.split()[1])
+            bet_options = [b['label'] for b in pending_bets]
+            selected_label = st.selectbox("Select Bet to Update", bet_options)
+            # Extract the ID from the selected label
+            selected_id = int(selected_label.split()[1])
             
             result = st.selectbox("Result", ["Win", "Loss"])
             return_amount = st.number_input("Return Amount ($)", min_value=0.0, step=0.01)
             
             if st.button("Update Result"):
+                # Get the stake for this bet
+                stake = 0
+                for b in bets:
+                    if b[0] == selected_id:
+                        stake = b[8] if len(b) > 8 else 0
+                        break
+                
                 if result == "Win":
-                    stake = [b[8] for b in bets if b[0] == selected_id][0]
                     profit_loss = return_amount - stake
                 else:
-                    stake = [b[8] for b in bets if b[0] == selected_id][0]
                     profit_loss = -stake
                 
                 update_bet_result(selected_id, result, return_amount, profit_loss)
