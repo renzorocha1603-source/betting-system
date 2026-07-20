@@ -35,10 +35,10 @@ with st.sidebar:
     min_ev = st.slider("Min. EV %", 1, 25, 5, 1)
     kelly_fraction = st.slider("Kelly Fraction", 0.1, 0.5, 0.25, 0.05)
     st.markdown("---")
-    st.caption("v4.3 · Only Solutions Inc.")
+    st.caption("v4.4 · Only Solutions Inc.")
 
 # ─────────────────────────────────────────────────────────────
-# DEEPSEEK AI FUNCTION
+# DEEPSEEK AI FUNCTION — STRICTLY ONE BEST BET
 # ─────────────────────────────────────────────────────────────
 def ask_deepseek(prompt: str) -> str:
     """Get analysis from DeepSeek AI using hardcoded key"""
@@ -54,11 +54,11 @@ def ask_deepseek(prompt: str) -> str:
         data = {
             "model": "deepseek-chat",
             "messages": [
-                {"role": "system", "content": "You are Allison, a professional betting analyst. You MUST choose exactly ONE outcome to bet on — the best one based on value. Never recommend all three. Be decisive. Format: 'BEST BET: [outcome] @ [odds]. Why: [brief reason]'"},
+                {"role": "system", "content": "You are Allison, a professional betting analyst. You MUST choose exactly ONE outcome to bet on — the best one based on value. Never recommend all three. If you recommend more than one, you have failed. Format: 'BEST BET: [outcome] @ [odds]. Why: [one sentence reason]'"},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.2,
-            "max_tokens": 300
+            "temperature": 0.1,
+            "max_tokens": 150
         }
         
         response = requests.post(url, headers=headers, json=data, timeout=15)
@@ -76,9 +76,9 @@ def ask_deepseek(prompt: str) -> str:
         return f"⚠️ AI Error: {str(e)}"
 
 def get_ai_analysis(match: dict) -> dict:
-    """Get AI analysis for a single match — picks ONE best bet"""
+    """Get AI analysis for a single match — picks ONE best bet only"""
     prompt = f"""
-    Analyze this match and tell me ONLY ONE bet to take.
+    Analyze this match and tell me ONLY ONE bet to take — the single best one.
     
     Match: {match.get('home_team', '')} vs {match.get('away_team', '')}
     Sport: {match.get('sport', 'Soccer')}
@@ -86,6 +86,7 @@ def get_ai_analysis(match: dict) -> dict:
     
     Choose the BEST SINGLE bet out of the three outcomes.
     Answer format exactly: "BEST BET: [outcome] @ [odds]. Why: [one sentence reason]"
+    Do not mention the other outcomes. Only mention the one you recommend.
     """
     
     response = ask_deepseek(prompt)
@@ -413,7 +414,7 @@ with tab2:
             away_odds = st.number_input("Away Odds", min_value=1.01, step=0.01, value=2.80)
         with col4:
             stake = st.number_input("Stake ($)", min_value=1.0, step=1.0, value=10.0)
-            use_ai = st.checkbox("🤖 AI Analysis")
+            use_ai = st.checkbox("🤖 AI Analysis (single best bet)")
         
         submitted = st.form_submit_button("Add Match")
         
@@ -431,9 +432,9 @@ with tab2:
             st.success(f"✅ Added: {home_team} vs {away_team} (Stake: ${stake:.2f})")
             
             if use_ai:
-                with st.spinner("🤖 AI is analyzing..."):
+                with st.spinner("🤖 AI is analyzing for the single best bet..."):
                     analysis = get_ai_analysis(match_data)
-                    st.info(f"**AI Analysis:**\n\n{analysis['analysis']}")
+                    st.info(f"**🤖 AI Recommendation:**\n\n{analysis['analysis']}")
             
             st.rerun()
     
@@ -558,7 +559,7 @@ with tab3:
                         'sport': bet['sport']
                     }
                     analysis = get_ai_analysis(match)
-                    st.info(f"**AI Analysis:**\n\n{analysis['analysis']}")
+                    st.info(f"**🤖 AI Recommendation:**\n\n{analysis['analysis']}")
             
             st.markdown("---")
         
@@ -644,7 +645,6 @@ with tab5:
     if bets:
         data = []
         for bet in bets:
-            # Safely access each field
             bet_id = bet[0] if len(bet) > 0 else 0
             timestamp = bet[1][:16] if len(bet) > 1 and bet[1] else ''
             sport = bet[2] if len(bet) > 2 else ''
@@ -677,7 +677,6 @@ with tab5:
         st.markdown("---")
         st.subheader("✏️ Update Bet Result")
         
-        # Get pending bets safely using a separate method
         pending_bets = []
         for b in bets:
             if len(b) > 12 and b[12] == 'Pending':
@@ -690,16 +689,14 @@ with tab5:
                 })
         
         if pending_bets:
-            # Use a dictionary to map display labels to IDs
             bet_options = {b['label']: b['id'] for b in pending_bets}
             selected_label = st.selectbox("Select Bet to Update", list(bet_options.keys()))
-            selected_id = bet_options[selected_label]  # Direct lookup instead of splitting
+            selected_id = bet_options[selected_label]
             
             result = st.selectbox("Result", ["Win", "Loss"])
             return_amount = st.number_input("Return Amount ($)", min_value=0.0, step=0.01)
             
             if st.button("Update Result"):
-                # Get the stake for this bet
                 stake = 0
                 for b in bets:
                     if b[0] == selected_id:
