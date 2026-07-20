@@ -35,10 +35,10 @@ with st.sidebar:
     min_ev = st.slider("Min. EV %", 1, 25, 5, 1)
     kelly_fraction = st.slider("Kelly Fraction", 0.1, 0.5, 0.25, 0.05)
     st.markdown("---")
-    st.caption("v4.0 · Only Solutions Inc.")
+    st.caption("v4.1 · Only Solutions Inc.")
 
 # ─────────────────────────────────────────────────────────────
-# DEEPSEEK AI FUNCTION
+# DEEPSEEK AI FUNCTION — FIXED TO CHOOSE BEST BET
 # ─────────────────────────────────────────────────────────────
 def ask_deepseek(prompt: str) -> str:
     """Get analysis from DeepSeek AI using hardcoded key"""
@@ -54,11 +54,11 @@ def ask_deepseek(prompt: str) -> str:
         data = {
             "model": "deepseek-chat",
             "messages": [
-                {"role": "system", "content": "You are Allison, a professional betting analyst. Provide concise, actionable advice. Never guess — say 'I don't know' if uncertain."},
+                {"role": "system", "content": "You are Allison, a professional betting analyst. You MUST choose exactly ONE outcome to bet on — the best one based on value. Never recommend all three. Be decisive. Format: 'BEST BET: [outcome] @ [odds]. Why: [brief reason]'"},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.3,
-            "max_tokens": 400
+            "temperature": 0.2,
+            "max_tokens": 300
         }
         
         response = requests.post(url, headers=headers, json=data, timeout=15)
@@ -68,7 +68,7 @@ def ask_deepseek(prompt: str) -> str:
         elif response.status_code == 401:
             return "⚠️ Invalid DeepSeek API key. Please check your key."
         else:
-            return f"⚠️ API Error: {response.status_code} - {response.text[:100]}"
+            return f"⚠️ API Error: {response.status_code}"
             
     except requests.exceptions.Timeout:
         return "⚠️ AI request timed out. Please try again."
@@ -76,18 +76,16 @@ def ask_deepseek(prompt: str) -> str:
         return f"⚠️ AI Error: {str(e)}"
 
 def get_ai_analysis(match: dict) -> dict:
-    """Get AI analysis for a single match"""
+    """Get AI analysis for a single match — picks ONE best bet"""
     prompt = f"""
-    Analyze this match and give me:
-    1. The true probability of each outcome (home win, draw, away win) as percentages
-    2. A risk assessment (low/medium/high) with a brief reason
-    3. A final recommendation (bet/skip) and which outcome to bet on
+    Analyze this match and tell me ONLY ONE bet to take.
     
     Match: {match.get('home_team', '')} vs {match.get('away_team', '')}
     Sport: {match.get('sport', 'Soccer')}
     Odds: Home {match.get('home_odds', 0)}, Draw {match.get('draw_odds', 0)}, Away {match.get('away_odds', 0)}
     
-    Format your response clearly with sections.
+    Choose the BEST SINGLE bet out of the three outcomes.
+    Answer format exactly: "BEST BET: [outcome] @ [odds]. Why: [one sentence reason]"
     """
     
     response = ask_deepseek(prompt)
@@ -154,7 +152,7 @@ def add_bet(bet_data):
 def get_all_bets():
     conn = sqlite3.connect('betting_history.db')
     c = conn.cursor()
-    c.execute('SELECT * FROM bets ORDER BY timestamp DESC')
+    c.execute('SELECT id, timestamp, sport, home_team, away_team, bet_type, outcome, odds, stake, ev_percent, true_prob, implied_prob, result, return, profit_loss, notes FROM bets ORDER BY timestamp DESC')
     rows = c.fetchall()
     conn.close()
     return rows
@@ -393,15 +391,11 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(["📸 Upload", "📝 Manual", "📊 Resu
 
 with tab1:
     st.markdown("### 📸 Upload Odds Board Photo")
-    st.markdown("Take a photo of the odds board and upload it here.")
-    
     uploaded_file = st.file_uploader("Choose an image", type=["jpg", "jpeg", "png", "webp"])
-    
     if uploaded_file:
         image = Image.open(uploaded_file)
         st.image(image, caption="Uploaded Image", use_container_width=True)
-        st.info("📝 For best results, use the 'Manual' tab to enter odds directly.")
-        st.warning("OCR extraction requires additional setup. Manual input is more reliable.")
+        st.info("📝 For best results, use the 'Manual' tab.")
 
 with tab2:
     st.markdown("### 📝 Manual Odds Input")
@@ -418,7 +412,7 @@ with tab2:
             draw_odds = st.number_input("Draw Odds", min_value=1.01, step=0.01, value=3.20)
             away_odds = st.number_input("Away Odds", min_value=1.01, step=0.01, value=2.80)
         with col4:
-            stake = st.number_input("Stake ($)", min_value=1.0, step=1.0, value=10.0, help="How much you want to bet")
+            stake = st.number_input("Stake ($)", min_value=1.0, step=1.0, value=10.0)
             use_ai = st.checkbox("🤖 AI Analysis")
         
         submitted = st.form_submit_button("Add Match")
@@ -652,16 +646,16 @@ with tab5:
         for bet in bets:
             data.append({
                 'ID': bet[0],
-                'Timestamp': bet[1][:16],
-                'Sport': bet[2],
-                'Home': bet[3],
-                'Away': bet[4],
-                'Outcome': bet[6],
-                'Odds': bet[7],
-                'Stake': f"${bet[8]:.2f}",
-                'EV%': f"{bet[9]:.1f}%",
-                'Result': bet[12],
-                'P/L': f"${bet[14]:.2f}" if bet[14] != 0 else "Pending"
+                'Timestamp': bet[1][:16] if len(bet) > 1 else '',
+                'Sport': bet[2] if len(bet) > 2 else '',
+                'Home': bet[3] if len(bet) > 3 else '',
+                'Away': bet[4] if len(bet) > 4 else '',
+                'Outcome': bet[6] if len(bet) > 6 else '',
+                'Odds': bet[7] if len(bet) > 7 else 0,
+                'Stake': f"${bet[8]:.2f}" if len(bet) > 8 else '',
+                'EV%': f"{bet[9]:.1f}%" if len(bet) > 9 else '',
+                'Result': bet[12] if len(bet) > 12 else 'Pending',
+                'P/L': f"${bet[14]:.2f}" if len(bet) > 14 and bet[14] != 0 else "Pending"
             })
         
         df = pd.DataFrame(data)
@@ -670,9 +664,9 @@ with tab5:
         st.markdown("---")
         st.subheader("✏️ Update Bet Result")
         
-        pending_bets = [b for b in bets if b[12] == 'Pending']
+        pending_bets = [b for b in bets if len(b) > 12 and b[12] == 'Pending']
         if pending_bets:
-            bet_options = [f"ID {b[0]}: {b[3]} vs {b[4]} - {b[6]}" for b in pending_bets]
+            bet_options = [f"ID {b[0]}: {b[3] if len(b) > 3 else ''} vs {b[4] if len(b) > 4 else ''} - {b[6] if len(b) > 6 else ''}" for b in pending_bets]
             selected = st.selectbox("Select Bet to Update", bet_options)
             selected_id = int(selected.split()[1])
             
