@@ -191,25 +191,6 @@ def get_bet_summary(bets):
     }
 
 # ─────────────────────────────────────────────────────────────
-# EV FUNCTIONS — REALISTIC CALCULATIONS
-# ─────────────────────────────────────────────────────────────
-def calculate_real_ev(odds):
-    """Calculate realistic EV based on odds"""
-    # Implied probability from odds
-    implied_prob = 1 / odds
-    
-    # True probability is slightly higher (our edge)
-    # Usually 2-5% higher than implied
-    edge = random.uniform(0.02, 0.05)
-    true_prob = implied_prob * (1 + edge)
-    
-    # EV = (True Probability × Odds) - 1
-    ev = (true_prob * odds) - 1
-    ev_percent = ev * 100
-    
-    return ev_percent, true_prob * 100, implied_prob * 100
-
-# ─────────────────────────────────────────────────────────────
 # LANGUAGES
 # ─────────────────────────────────────────────────────────────
 LANGUAGES = {
@@ -447,7 +428,7 @@ LANGUAGES = {
 }
 
 # ─────────────────────────────────────────────────────────────
-# CYBER CSS — BRIGHT TEXT + THEME SUPPORT
+# CYBER CSS
 # ─────────────────────────────────────────────────────────────
 def get_theme_css():
     is_dark = st.session_state.theme == "dark"
@@ -500,7 +481,6 @@ def get_theme_css():
         max-width: 1400px !important;
     }}
     
-    /* ALL TEXT — BRIGHT AND VISIBLE */
     .stMarkdown, .stText, .stCaption, p, div, span, label, h1, h2, h3, h4, h5, h6 {{
         color: var(--text-primary) !important;
     }}
@@ -528,7 +508,6 @@ def get_theme_css():
     ::-webkit-scrollbar-track {{ background: var(--bg-deep); }}
     ::-webkit-scrollbar-thumb {{ background: var(--cyan); border-radius: 2px; }}
     
-    /* Top Nav */
     .terminal-nav {{
         display: flex;
         justify-content: space-between;
@@ -604,7 +583,6 @@ def get_theme_css():
         font-weight: 600;
     }}
     
-    /* KPI Cards */
     .kpi-grid {{
         display: grid;
         grid-template-columns: repeat(4, 1fr);
@@ -645,7 +623,6 @@ def get_theme_css():
     .kpi-card .change.positive {{ color: var(--lime); }}
     .kpi-card .change.negative {{ color: var(--red); }}
     
-    /* EV Explanation Banner */
     .ev-banner {{
         background: rgba(0, 243, 255, 0.05);
         border: 1px solid rgba(0, 243, 255, 0.1);
@@ -665,7 +642,6 @@ def get_theme_css():
     }}
     .ev-banner .ev-text strong {{ color: var(--cyan); }}
     
-    /* Arb Card */
     .arb-card {{
         background: var(--bg-card);
         backdrop-filter: blur(20px);
@@ -750,7 +726,6 @@ def get_theme_css():
         box-shadow: 0 0 30px var(--cyan-glow);
     }}
     
-    /* Hero Section */
     .hero-section {{
         text-align: center;
         padding: 3rem 2rem;
@@ -785,7 +760,6 @@ def get_theme_css():
         font-size: 0.7rem;
     }}
     
-    /* Feature Cards */
     .feature-card {{
         background: var(--bg-card);
         backdrop-filter: blur(20px);
@@ -798,7 +772,6 @@ def get_theme_css():
     .feature-card h3 {{ color: var(--text-primary); font-size: 1rem; }}
     .feature-card p {{ color: var(--text-muted); font-size: 0.8rem; }}
     
-    /* Pricing Card */
     .pricing-card {{
         background: var(--bg-card);
         backdrop-filter: blur(20px);
@@ -830,7 +803,6 @@ def get_theme_css():
     }}
     .pricing-card .feature-item::before {{ content: "✓ "; color: var(--lime); }}
     
-    /* Streamlit Overrides */
     div[data-testid="stTextInput"] input {{
         background: rgba(0,0,0,0.2) !important;
         border: 1px solid var(--border-glass) !important;
@@ -927,7 +899,6 @@ def get_theme_css():
     }}
     .stAlert .stMarkdown {{ color: var(--text-secondary) !important; }}
     
-    /* FAQ Section */
     .faq-container {{
         background: var(--bg-card);
         backdrop-filter: blur(20px);
@@ -949,17 +920,6 @@ def get_theme_css():
         line-height: 1.5;
     }}
     
-    .ev-explain-box {{
-        background: rgba(57, 255, 20, 0.04);
-        border: 1px solid rgba(57, 255, 20, 0.08);
-        border-radius: 8px;
-        padding: 0.6rem 1rem;
-        margin: 0.5rem 0 1rem 0;
-        font-size: 0.8rem;
-        color: var(--text-secondary);
-    }}
-    .ev-explain-box strong {{ color: var(--lime); }}
-    
     #MainMenu, footer, header {{ visibility: hidden !important; display: none !important; }}
     </style>
     """
@@ -973,7 +933,6 @@ def landing_page():
     lang = st.session_state.get('lang', 'en')
     t = LANGUAGES[lang]
     
-    # Language + Theme toggle
     col_lang1, col_lang2, col_lang3, col_lang4, col_lang5 = st.columns([8, 0.8, 0.8, 0.8, 0.8])
     with col_lang2:
         if st.button(t['lang_en'], key="lang_en_landing"):
@@ -992,7 +951,6 @@ def landing_page():
         if st.button(theme_label, key="theme_landing"):
             toggle_theme()
     
-    # Hero
     st.markdown(f"""
     <div class="hero-section">
         <h1>{t['title']}</h1>
@@ -1004,7 +962,6 @@ def landing_page():
     </div>
     """, unsafe_allow_html=True)
     
-    # Features
     col1, col2, col3 = st.columns(3)
     features = [
         ("🎯", "EV Scanner", "Find positive expected value bets automatically"),
@@ -1023,7 +980,6 @@ def landing_page():
     
     st.markdown("---")
     
-    # Pricing
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
         st.markdown(f"""
@@ -1052,7 +1008,6 @@ def landing_page():
         </div>
         """, unsafe_allow_html=True)
     
-    # FAQ Section
     st.markdown("---")
     st.markdown(f"## {t['faq_title']}")
     
@@ -1193,7 +1148,6 @@ def dashboard():
         st.rerun()
         return
     
-    # Language + Theme toggle
     col_lang1, col_lang2, col_lang3, col_lang4, col_lang5 = st.columns([8, 0.8, 0.8, 0.8, 0.8])
     with col_lang2:
         if st.button(t['lang_en'], key="lang_en_dash"):
@@ -1212,7 +1166,6 @@ def dashboard():
         if st.button(theme_label, key="theme_dash"):
             toggle_theme()
     
-    # Top Nav
     st.markdown(f"""
     <div class="terminal-nav">
         <div class="terminal-logo">
@@ -1234,7 +1187,6 @@ def dashboard():
     </div>
     """, unsafe_allow_html=True)
     
-    # KPI Grid
     bets = get_user_bets(st.session_state.user_id)
     
     if bets:
@@ -1281,7 +1233,6 @@ def dashboard():
     
     st.markdown("---")
     
-    # EV Explanation Banner
     st.markdown(f"""
     <div class="ev-banner">
         <span class="ev-icon">💡</span>
@@ -1289,7 +1240,6 @@ def dashboard():
     </div>
     """, unsafe_allow_html=True)
     
-    # Tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "🎯 Scanner",
         "📝 Manual",
@@ -1314,7 +1264,6 @@ def dashboard():
             with st.spinner("Scanning 70+ bookmakers..."):
                 sample_bets = []
                 
-                # Generate realistic EV bets with varied values
                 ev_options = [3.2, 4.1, 5.8, 6.7, 8.2, 9.5, 10.1, 12.3]
                 odds_options = [2.14, 3.44, 6.88, 8.20, 2.99, 3.15, 5.50, 4.80]
                 outcomes = ['Draw', 'Home Win', 'Away Win']
@@ -1330,7 +1279,6 @@ def dashboard():
                     ('Chelsea', 'West Ham')
                 ]
                 
-                # Generate 5 realistic bets
                 for i in range(5):
                     match = random.choice(matches)
                     odds = random.choice(odds_options)
@@ -1338,7 +1286,6 @@ def dashboard():
                     outcome = random.choice(outcomes)
                     book = random.choice(books)
                     
-                    # Calculate realistic stake based on EV
                     stake = round(10 + (ev / 2), 2)
                     potential_return = round(stake * odds, 2)
                     
@@ -1407,7 +1354,6 @@ def dashboard():
                 total_stake += bet['stake']
                 total_return += bet['potential_return']
             
-            # Summary with realistic expectations
             st.markdown(f"""
             <div style="background:var(--bg-card); border:1px solid var(--border-glass); border-radius:var(--card-radius); padding:1rem 1.5rem; margin-top:0.5rem;">
                 <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:1rem;">
@@ -1446,7 +1392,6 @@ def dashboard():
                     odds_map = {"Home Win": home_odds, "Draw": draw_odds, "Away Win": away_odds}
                     selected_odds = odds_map.get(outcome, 0)
                     
-                    # Calculate realistic EV
                     implied_prob = 1 / selected_odds if selected_odds > 0 else 0
                     edge = random.uniform(0.02, 0.05)
                     true_prob = implied_prob * (1 + edge)
@@ -1531,139 +1476,4 @@ def dashboard():
             else:
                 st.info(t['no_pending'])
         else:
-            st.info(t['no_bets'])
-    
-    # ─── TAB 4: SLIP ─────────────────────────────────────────
-    with tab4:
-        st.markdown(f"### {t['slip_title']}")
-        
-        bets = get_user_bets(st.session_state.user_id)
-        pending = [b for b in bets if b[10] == 'Pending']
-        
-        if pending:
-            selected = []
-            st.markdown("### Select bets for your slip")
-            
-            for bet in pending[:5]:
-                if st.checkbox(f"{bet[4]} vs {bet[5]} — {bet[6]} @ {bet[7]}", key=f"slip_{bet[0]}"):
-                    selected.append(bet)
-            
-            if selected:
-                total_stake = sum(b[8] for b in selected)
-                
-                slip_text = f"""
-═══════════════════════════════════════════════
-📄 PARI SPORTIF — BULLETIN DE JEU
-═══════════════════════════════════════════════
-Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-───────────────────────────────────────────────
-"""
-                for bet in selected:
-                    slip_text += f"""
-{bet[4]} vs {bet[5]}
-   Bet: {bet[6]} @ {bet[7]}
-   Stake: ${bet[8]:.2f}
-   Potential: ${bet[8] * bet[7]:.2f}
-"""
-                
-                slip_text += f"""
-───────────────────────────────────────────────
-Total Stake: ${total_stake:.2f}
-═══════════════════════════════════════════════
-"""
-                
-                st.code(slip_text, language="text")
-                
-                st.download_button(
-                    label=t['download_slip'],
-                    data=slip_text,
-                    file_name=f"slip_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-                    mime="text/plain",
-                    use_container_width=True
-                )
-        else:
-            st.info(t['no_pending_slips'])
-    
-    # ─── TAB 5: FAQ ──────────────────────────────────────────
-    with tab5:
-        st.markdown(f"## {t['faq_title']}")
-        
-        faqs = [
-            (t['faq_q1'], t['faq_a1']),
-            (t['faq_q2'], t['faq_a2']),
-            (t['faq_q3'], t['faq_a3']),
-            (t['faq_q4'], t['faq_a4']),
-            (t['faq_q5'], t['faq_a5'])
-        ]
-        
-        for q, a in faqs:
-            st.markdown(f"""
-            <div class="faq-container">
-                <div class="faq-q">❓ {q}</div>
-                <div class="faq-a">{a}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────────────────────
-# SESSION STATE
-# ─────────────────────────────────────────────────────────────
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
-if 'page' not in st.session_state:
-    st.session_state.page = "landing"
-if 'scan_results' not in st.session_state:
-    st.session_state.scan_results = []
-if 'user_id' not in st.session_state:
-    st.session_state.user_id = None
-if 'lang' not in st.session_state:
-    st.session_state.lang = "en"
-if 'is_admin' not in st.session_state:
-    st.session_state.is_admin = 0
-
-# ─────────────────────────────────────────────────────────────
-# ROUTER
-# ─────────────────────────────────────────────────────────────
-init_db()
-
-if st.session_state.authenticated:
-    dashboard()
-else:
-    if st.session_state.page == "signup":
-        signup_page()
-    elif st.session_state.page == "login":
-        login_page()
-    else:
-        landing_page()
-
-# ─────────────────────────────────────────────────────────────
-# SIDEBAR — LOGOUT
-# ─────────────────────────────────────────────────────────────
-if st.session_state.authenticated:
-    with st.sidebar:
-        st.markdown("---")
-        st.markdown(f"""
-        <div style="display:flex; align-items:center; gap:0.8rem; padding:0.5rem 0;">
-            <div style="width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg, var(--cyan), var(--lime)); display:flex; align-items:center; justify-content:center; color:#0B0E14; font-weight:700; font-size:1.2rem;">
-                {st.session_state.user_name[0].upper()}
-            </div>
-            <div>
-                <div style="color:var(--text-primary); font-weight:500;">{st.session_state.user_name}</div>
-                <div style="color:var(--text-muted); font-size:0.7rem;">{st.session_state.user_email}</div>
-                <div style="color:var(--cyan); font-size:0.65rem;">{'👑 Admin' if st.session_state.is_admin else '👤 User'}</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        st.markdown("---")
-        
-        if st.button("🚪 Sign Out", use_container_width=True):
-            for key in ['authenticated', 'user_email', 'user_name', 'user_id', 'is_admin']:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.session_state.page = "landing"
-            st.rerun()
-        
-        st.markdown(f"""
-        <div style="font-size:0.6rem; color:var(--text-muted); text-align:center; margin-top:2rem;">
-            {COMPANY_NAME}<br>{DOMAIN}
-        </div>
-        """, unsafe_allow_html=True)
+            st.info
