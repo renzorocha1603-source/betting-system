@@ -8,7 +8,6 @@ import re
 import io
 from datetime import datetime
 from PIL import Image
-import pytesseract
 import os
 import base64
 
@@ -401,10 +400,8 @@ with tab1:
     if uploaded_file:
         image = Image.open(uploaded_file)
         st.image(image, caption="Uploaded Image", use_container_width=True)
-        
-        if st.button("🔍 Extract Odds", use_container_width=True, type="primary"):
-            st.info("📝 OCR scanning is ready. For best results, use manual input for now.")
-            st.warning("Manual input is more reliable. Use the 'Manual' tab above.")
+        st.info("📝 For best results, use the 'Manual' tab to enter odds directly.")
+        st.warning("OCR extraction requires additional setup. Manual input is more reliable.")
 
 with tab2:
     st.markdown("### 📝 Manual Odds Input")
