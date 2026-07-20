@@ -42,7 +42,7 @@ with st.sidebar:
     min_arb_profit = st.slider("Min. Arbitrage Profit %", 0.1, 5.0, 0.5, 0.1)
     kelly_fraction = st.slider("Kelly Fraction", 0.1, 0.5, 0.25, 0.05)
     st.markdown("---")
-    st.caption("v5.1 · Only Solutions Inc.")
+    st.caption("v5.2 · Only Solutions Inc.")
 
 # ─────────────────────────────────────────────────────────────
 # TELEGRAM ALERT FUNCTION (PASSIVE)
@@ -1110,7 +1110,7 @@ with tab6:
                 events = scanner.fetch_live_odds(sport)
                 total_events += len(events)
                 
-                # FIX: Initialize sport_debug with ALL keys
+                # FIX: Initialize ALL keys at the start
                 sport_debug = {
                     'sport': sport,
                     'events_found': len(events),
@@ -1142,7 +1142,7 @@ with tab6:
                                     home_team = event.get('home_team', '')
                                     away_team = event.get('away_team', '')
                                     
-                                    # Check for arbitrage (only if mode includes it)
+                                    # Check for arbitrage
                                     if scan_mode in ["Arbitrage", "Both"]:
                                         arb = ArbitrageEngine.calculate_arbitrage(home, away, draw)
                                         if arb and arb.get('roi_percentage', 0) >= 0.1:
@@ -1166,7 +1166,7 @@ with tab6:
                                             })
                                             sport_debug['arbitrage_found'] += 1
                                     
-                                    # Check for EV bets (only if mode includes it)
+                                    # Check for EV bets
                                     if scan_mode in ["EV (Value Bets)", "Both"]:
                                         outcomes = [
                                             ('home', home, home_team),
