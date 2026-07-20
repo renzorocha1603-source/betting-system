@@ -36,647 +36,6 @@ DOMAIN = "onlysolutions.ca"
 YEAR = datetime.now().year
 
 # ─────────────────────────────────────────────────────────────
-# ADVANCED CYBER UI CSS — Premium Trading Terminal
-# ─────────────────────────────────────────────────────────────
-CYBER_CSS = """
-<style>
-/* ─────────────────────────────────────────────────────────────
-   ROOT VARIABLES & RESET
-   ───────────────────────────────────────────────────────────── */
-   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&family=Orbitron:wght@400;500;600;700;800;900&display=swap');
-   
-   * {
-       margin: 0;
-       padding: 0;
-       box-sizing: border-box;
-   }
-   
-   :root {
-       --bg-deep: #0B0E14;
-       --bg-surface: #0F172A;
-       --bg-card: rgba(255, 255, 255, 0.03);
-       --border-glass: rgba(255, 255, 255, 0.06);
-       --border-glow: rgba(0, 243, 255, 0.15);
-       --text-primary: #E8EDF5;
-       --text-secondary: #7A8BA0;
-       --text-muted: #3A4A60;
-       --cyan: #00F3FF;
-       --cyan-glow: rgba(0, 243, 255, 0.25);
-       --lime: #39FF14;
-       --lime-glow: rgba(57, 255, 20, 0.2);
-       --orange: #FF6B35;
-       --orange-glow: rgba(255, 107, 53, 0.2);
-       --purple: #7C3AED;
-       --purple-glow: rgba(124, 58, 237, 0.2);
-       --red: #FF3355;
-       --card-radius: 16px;
-       --transition-speed: 0.3s;
-       --font-mono: 'JetBrains Mono', monospace;
-       --font-display: 'Orbitron', sans-serif;
-   }
-
-/* ─────────────────────────────────────────────────────────────
-   GLOBAL DARK THEME
-   ───────────────────────────────────────────────────────────── */
-   html, body, .stApp, .stApp > div, .main, .block-container,
-   div[data-testid="stAppViewContainer"],
-   div[data-testid="stHeader"],
-   section[data-testid="stSidebar"],
-   .st-emotion-cache-1y4p8pa {
-       background: var(--bg-deep) !important;
-       background-color: var(--bg-deep) !important;
-   }
-   
-   .block-container {
-       padding: 1.5rem 2rem 3rem !important;
-       max-width: 1400px !important;
-   }
-   
-   ::-webkit-scrollbar { width: 4px; height: 4px; }
-   ::-webkit-scrollbar-track { background: var(--bg-deep); }
-   ::-webkit-scrollbar-thumb { 
-       background: var(--cyan); 
-       border-radius: 2px;
-       box-shadow: 0 0 20px var(--cyan-glow);
-   }
-
-/* ─────────────────────────────────────────────────────────────
-   TOP NAV BAR — CYBER TERMINAL
-   ───────────────────────────────────────────────────────────── */
-   .terminal-nav {
-       display: flex;
-       justify-content: space-between;
-       align-items: center;
-       padding: 0.8rem 1.5rem;
-       background: var(--bg-surface);
-       border: 1px solid var(--border-glass);
-       border-radius: var(--card-radius);
-       margin-bottom: 1.5rem;
-       backdrop-filter: blur(20px);
-       position: relative;
-       overflow: hidden;
-   }
-   .terminal-nav::before {
-       content: '';
-       position: absolute;
-       top: 0;
-       left: 0;
-       right: 0;
-       height: 2px;
-       background: linear-gradient(90deg, transparent, var(--cyan), var(--lime), transparent);
-       animation: scanline 4s ease-in-out infinite;
-   }
-   @keyframes scanline {
-       0% { transform: translateX(-100%); }
-       100% { transform: translateX(100%); }
-   }
-   .terminal-logo {
-       display: flex;
-       align-items: center;
-       gap: 0.75rem;
-   }
-   .terminal-logo .icon {
-       font-size: 1.4rem;
-       filter: drop-shadow(0 0 10px var(--cyan-glow));
-   }
-   .terminal-logo .brand {
-       font-family: var(--font-display);
-       font-size: 1.1rem;
-       font-weight: 700;
-       color: var(--text-primary);
-       letter-spacing: 0.12em;
-       background: linear-gradient(135deg, var(--cyan), var(--lime));
-       -webkit-background-clip: text;
-       -webkit-text-fill-color: transparent;
-   }
-   .terminal-logo .sub {
-       font-family: var(--font-mono);
-       font-size: 0.55rem;
-       color: var(--text-muted);
-       letter-spacing: 0.15em;
-       text-transform: uppercase;
-       -webkit-text-fill-color: var(--text-muted);
-   }
-   .terminal-status {
-       display: flex;
-       align-items: center;
-       gap: 1.5rem;
-       font-family: var(--font-mono);
-       font-size: 0.65rem;
-   }
-   .terminal-status .dot {
-       width: 8px;
-       height: 8px;
-       border-radius: 50%;
-       background: var(--lime);
-       box-shadow: 0 0 20px var(--lime-glow);
-       animation: pulse-dot 2s ease-in-out infinite;
-   }
-   @keyframes pulse-dot {
-       0%, 100% { opacity: 1; transform: scale(1); }
-       50% { opacity: 0.5; transform: scale(0.8); }
-   }
-   .terminal-status .live-text {
-       color: var(--lime);
-       font-weight: 600;
-       letter-spacing: 0.08em;
-   }
-   .terminal-status .stats {
-       color: var(--text-muted);
-   }
-   .terminal-status .stats span {
-       color: var(--text-secondary);
-       font-weight: 600;
-   }
-   .terminal-status .user-badge {
-       background: rgba(0, 243, 255, 0.06);
-       border: 1px solid rgba(0, 243, 255, 0.1);
-       border-radius: 20px;
-       padding: 0.2rem 0.8rem;
-       color: var(--cyan);
-       font-size: 0.6rem;
-       font-weight: 600;
-       letter-spacing: 0.08em;
-   }
-
-/* ─────────────────────────────────────────────────────────────
-   KPI SPARKLINE BLOCKS — GLASSMORPHISM
-   ───────────────────────────────────────────────────────────── */
-   .kpi-grid {
-       display: grid;
-       grid-template-columns: repeat(4, 1fr);
-       gap: 1rem;
-       margin-bottom: 1.5rem;
-   }
-   .kpi-card {
-       background: var(--bg-card);
-       backdrop-filter: blur(20px);
-       border: 1px solid var(--border-glass);
-       border-radius: var(--card-radius);
-       padding: 1.2rem 1.5rem;
-       transition: all var(--transition-speed) ease;
-       position: relative;
-       overflow: hidden;
-   }
-   .kpi-card::after {
-       content: '';
-       position: absolute;
-       top: 0;
-       right: 0;
-       width: 100px;
-       height: 100px;
-       background: radial-gradient(circle at top right, var(--cyan-glow), transparent 70%);
-       opacity: 0.1;
-       pointer-events: none;
-   }
-   .kpi-card:hover {
-       border-color: var(--cyan);
-       transform: translateY(-2px);
-       box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
-   }
-   .kpi-card .label {
-       font-family: var(--font-mono);
-       font-size: 0.55rem;
-       color: var(--text-muted);
-       text-transform: uppercase;
-       letter-spacing: 0.1em;
-       margin-bottom: 0.3rem;
-   }
-   .kpi-card .value {
-       font-family: var(--font-display);
-       font-size: 1.6rem;
-       font-weight: 700;
-       color: var(--text-primary);
-       letter-spacing: 0.02em;
-   }
-   .kpi-card .value.cyan { color: var(--cyan); text-shadow: 0 0 30px var(--cyan-glow); }
-   .kpi-card .value.lime { color: var(--lime); text-shadow: 0 0 30px var(--lime-glow); }
-   .kpi-card .value.orange { color: var(--orange); text-shadow: 0 0 30px var(--orange-glow); }
-   .kpi-card .value.purple { color: var(--purple); text-shadow: 0 0 30px var(--purple-glow); }
-   .kpi-card .change {
-       font-family: var(--font-mono);
-       font-size: 0.6rem;
-       margin-top: 0.25rem;
-   }
-   .kpi-card .change.positive { color: var(--lime); }
-   .kpi-card .change.negative { color: var(--red); }
-
-/* ─────────────────────────────────────────────────────────────
-   ARBITRAGE CARD — PREMIUM OPPORTUNITY BLOCK
-   ───────────────────────────────────────────────────────────── */
-   .arb-card {
-       background: var(--bg-card);
-       backdrop-filter: blur(20px);
-       border: 1px solid var(--border-glass);
-       border-radius: var(--card-radius);
-       padding: 1.25rem 1.5rem;
-       margin-bottom: 0.75rem;
-       transition: all var(--transition-speed) ease;
-       position: relative;
-       overflow: hidden;
-   }
-   .arb-card:hover {
-       border-color: var(--cyan);
-       box-shadow: 0 0 40px rgba(0, 243, 255, 0.04), inset 0 0 40px rgba(0, 243, 255, 0.01);
-   }
-   .arb-card .arb-header {
-       display: flex;
-       justify-content: space-between;
-       align-items: flex-start;
-       margin-bottom: 0.75rem;
-       flex-wrap: wrap;
-       gap: 0.5rem;
-   }
-   .arb-card .arb-match {
-       display: flex;
-       flex-direction: column;
-   }
-   .arb-card .arb-match .teams {
-       font-family: 'Inter', sans-serif;
-       font-size: 0.95rem;
-       font-weight: 600;
-       color: var(--text-primary);
-   }
-   .arb-card .arb-match .teams .vs {
-       color: var(--text-muted);
-       font-weight: 400;
-       margin: 0 0.3rem;
-   }
-   .arb-card .arb-match .meta {
-       font-family: var(--font-mono);
-       font-size: 0.6rem;
-       color: var(--text-muted);
-       text-transform: uppercase;
-       letter-spacing: 0.06em;
-       margin-top: 0.15rem;
-   }
-   .arb-card .arb-badge {
-       display: inline-flex;
-       align-items: center;
-       gap: 0.4rem;
-       font-family: var(--font-display);
-       font-size: 0.75rem;
-       font-weight: 700;
-       color: var(--lime);
-       background: rgba(57, 255, 20, 0.06);
-       border: 1px solid rgba(57, 255, 20, 0.1);
-       padding: 0.3rem 0.8rem;
-       border-radius: 20px;
-       letter-spacing: 0.04em;
-       white-space: nowrap;
-   }
-   .arb-card .arb-badge.negative {
-       color: var(--red);
-       border-color: rgba(255, 51, 85, 0.15);
-       background: rgba(255, 51, 85, 0.06);
-   }
-   .arb-card .arb-body {
-       display: flex;
-       justify-content: space-between;
-       align-items: center;
-       flex-wrap: wrap;
-       gap: 1rem;
-   }
-   .arb-card .odds-grid {
-       display: flex;
-       gap: 1.25rem;
-   }
-   .arb-card .odd-cell {
-       display: flex;
-       flex-direction: column;
-       align-items: center;
-       padding: 0.3rem 0.8rem;
-       background: rgba(0, 0, 0, 0.2);
-       border-radius: 8px;
-       min-width: 60px;
-       border: 1px solid transparent;
-       transition: all var(--transition-speed) ease;
-   }
-   .arb-card .odd-cell:hover {
-       border-color: rgba(0, 243, 255, 0.1);
-   }
-   .arb-card .odd-cell .odd-label {
-       font-family: var(--font-mono);
-       font-size: 0.5rem;
-       color: var(--text-muted);
-       text-transform: uppercase;
-       letter-spacing: 0.06em;
-   }
-   .arb-card .odd-cell .odd-value {
-       font-family: var(--font-mono);
-       font-size: 0.95rem;
-       font-weight: 600;
-       color: var(--text-secondary);
-   }
-   .arb-card .odd-cell .odd-value.highlight {
-       color: var(--cyan);
-       text-shadow: 0 0 20px var(--cyan-glow);
-   }
-   .arb-card .stake-distribution {
-       display: flex;
-       align-items: center;
-       gap: 0.5rem;
-       font-family: var(--font-mono);
-       font-size: 0.65rem;
-       color: var(--text-muted);
-       padding: 0.3rem 0.8rem;
-       background: rgba(0, 0, 0, 0.2);
-       border-radius: 8px;
-       border: 1px solid var(--border-glass);
-   }
-   .arb-card .stake-distribution .stake-amount {
-       color: var(--text-secondary);
-       font-weight: 600;
-   }
-   .arb-card .stake-distribution .stake-amount.cyan { color: var(--cyan); }
-   .arb-card .stake-distribution .stake-amount.lime { color: var(--lime); }
-   .arb-card .stake-distribution .stake-amount.orange { color: var(--orange); }
-   .arb-card .arb-actions {
-       display: flex;
-       gap: 0.5rem;
-   }
-   .arb-card .arb-actions .action-btn {
-       background: rgba(0, 243, 255, 0.06);
-       border: 1px solid rgba(0, 243, 255, 0.1);
-       color: var(--cyan);
-       padding: 0.3rem 0.8rem;
-       border-radius: 6px;
-       font-family: var(--font-mono);
-       font-size: 0.6rem;
-       font-weight: 600;
-       cursor: pointer;
-       transition: all var(--transition-speed) ease;
-       text-transform: uppercase;
-       letter-spacing: 0.06em;
-   }
-   .arb-card .arb-actions .action-btn:hover {
-       background: rgba(0, 243, 255, 0.12);
-       border-color: var(--cyan);
-       box-shadow: 0 0 20px var(--cyan-glow);
-   }
-   .arb-card .arb-actions .action-btn.primary {
-       background: linear-gradient(135deg, var(--cyan), #0099CC);
-       color: var(--bg-deep);
-       border: none;
-   }
-   .arb-card .arb-actions .action-btn.primary:hover {
-       box-shadow: 0 0 30px var(--cyan-glow);
-       transform: scale(1.02);
-   }
-
-/* ─────────────────────────────────────────────────────────────
-   CALCULATOR — INTERACTIVE STAKE DISTRIBUTION
-   ───────────────────────────────────────────────────────────── */
-   .calc-container {
-       background: var(--bg-card);
-       backdrop-filter: blur(20px);
-       border: 1px solid var(--border-glass);
-       border-radius: var(--card-radius);
-       padding: 1.5rem;
-       margin: 1rem 0;
-   }
-   .calc-container .calc-title {
-       font-family: var(--font-display);
-       font-size: 0.75rem;
-       font-weight: 600;
-       color: var(--text-secondary);
-       text-transform: uppercase;
-       letter-spacing: 0.12em;
-       margin-bottom: 1rem;
-   }
-   .calc-container .calc-grid {
-       display: grid;
-       grid-template-columns: 1fr 1fr 1fr;
-       gap: 1rem;
-   }
-   .calc-container .calc-input-group {
-       display: flex;
-       flex-direction: column;
-       gap: 0.3rem;
-   }
-   .calc-container .calc-input-group label {
-       font-family: var(--font-mono);
-       font-size: 0.55rem;
-       color: var(--text-muted);
-       text-transform: uppercase;
-       letter-spacing: 0.06em;
-   }
-   .calc-container .calc-input-group input {
-       background: rgba(0, 0, 0, 0.3);
-       border: 1px solid var(--border-glass);
-       border-radius: 8px;
-       padding: 0.6rem 0.8rem;
-       color: var(--text-primary);
-       font-family: var(--font-mono);
-       font-size: 0.85rem;
-       transition: all var(--transition-speed) ease;
-   }
-   .calc-container .calc-input-group input:focus {
-       border-color: var(--cyan);
-       outline: none;
-       box-shadow: 0 0 20px var(--cyan-glow);
-   }
-   .calc-container .calc-result {
-       display: flex;
-       align-items: center;
-       justify-content: center;
-       gap: 0.75rem;
-       padding: 0.5rem 1rem;
-       background: rgba(0, 243, 255, 0.04);
-       border: 1px solid rgba(0, 243, 255, 0.08);
-       border-radius: 8px;
-       font-family: var(--font-mono);
-   }
-   .calc-container .calc-result .result-label {
-       font-size: 0.55rem;
-       color: var(--text-muted);
-       text-transform: uppercase;
-       letter-spacing: 0.06em;
-   }
-   .calc-container .calc-result .result-value {
-       font-size: 1.1rem;
-       font-weight: 700;
-       color: var(--lime);
-   }
-
-/* ─────────────────────────────────────────────────────────────
-   STREAMLIT OVERRIDES — SEAMLESS INTEGRATION
-   ───────────────────────────────────────────────────────────── */
-   .stButton button, div[data-testid="stFormSubmitButton"] button {
-       background: linear-gradient(135deg, var(--cyan), #0099CC) !important;
-       color: var(--bg-deep) !important;
-       border: none !important;
-       border-radius: 8px !important;
-       font-family: var(--font-mono) !important;
-       font-weight: 700 !important;
-       font-size: 0.7rem !important;
-       letter-spacing: 0.08em !important;
-       text-transform: uppercase !important;
-       padding: 0.5rem 1.5rem !important;
-       transition: all var(--transition-speed) ease !important;
-       box-shadow: 0 0 20px var(--cyan-glow) !important;
-   }
-   .stButton button:hover, div[data-testid="stFormSubmitButton"] button:hover {
-       transform: translateY(-2px) !important;
-       box-shadow: 0 0 40px var(--cyan-glow) !important;
-   }
-   .stButton button[kind="secondary"] {
-       background: transparent !important;
-       color: var(--text-secondary) !important;
-       border: 1px solid var(--border-glass) !important;
-       box-shadow: none !important;
-   }
-   .stButton button[kind="secondary"]:hover {
-       border-color: var(--cyan) !important;
-       color: var(--cyan) !important;
-   }
-   .stDownloadButton button {
-       background: linear-gradient(135deg, var(--lime), #00CC77) !important;
-       color: var(--bg-deep) !important;
-       border: none !important;
-       border-radius: 8px !important;
-       font-family: var(--font-mono) !important;
-       font-weight: 700 !important;
-       font-size: 0.7rem !important;
-       letter-spacing: 0.08em !important;
-       text-transform: uppercase !important;
-       padding: 0.5rem 1.5rem !important;
-       box-shadow: 0 0 20px var(--lime-glow) !important;
-   }
-   .stDownloadButton button:hover {
-       transform: translateY(-2px) !important;
-       box-shadow: 0 0 40px var(--lime-glow) !important;
-   }
-   
-   div[data-testid="stTextInput"] input,
-   div[data-testid="stNumberInput"] input {
-       background: rgba(0, 0, 0, 0.3) !important;
-       border: 1px solid var(--border-glass) !important;
-       border-radius: 8px !important;
-       color: var(--text-primary) !important;
-       font-family: 'Inter', sans-serif !important;
-       padding: 0.5rem 1rem !important;
-       transition: all var(--transition-speed) ease !important;
-   }
-   div[data-testid="stTextInput"] input:focus {
-       border-color: var(--cyan) !important;
-       box-shadow: 0 0 20px var(--cyan-glow) !important;
-   }
-   
-   div[data-testid="metric-container"] {
-       background: var(--bg-card) !important;
-       backdrop-filter: blur(20px) !important;
-       border: 1px solid var(--border-glass) !important;
-       border-radius: var(--card-radius) !important;
-       padding: 0.8rem 1rem !important;
-       transition: all var(--transition-speed) ease !important;
-   }
-   div[data-testid="metric-container"]:hover {
-       border-color: var(--cyan) !important;
-   }
-   div[data-testid="metric-label"] {
-       font-family: var(--font-mono) !important;
-       font-size: 0.5rem !important;
-       color: var(--text-muted) !important;
-       text-transform: uppercase !important;
-       letter-spacing: 0.08em !important;
-   }
-   div[data-testid="metric-value"] {
-       font-family: var(--font-display) !important;
-       font-size: 1.2rem !important;
-       font-weight: 700 !important;
-       color: var(--text-primary) !important;
-   }
-   
-   section[data-testid="stSidebar"] {
-       background: var(--bg-surface) !important;
-       border-right: 1px solid var(--border-glass) !important;
-       padding: 1rem 0 !important;
-   }
-   section[data-testid="stSidebar"] .stMarkdown {
-       color: var(--text-secondary) !important;
-   }
-   
-   .stSelectbox > div > div {
-       background: rgba(0, 0, 0, 0.3) !important;
-       border: 1px solid var(--border-glass) !important;
-       border-radius: 8px !important;
-       color: var(--text-primary) !important;
-   }
-   
-   .stSlider div[data-baseweb="slider"] {
-       background: var(--border-glass) !important;
-   }
-   .stSlider div[data-baseweb="slider"] div {
-       background: var(--cyan) !important;
-       box-shadow: 0 0 15px var(--cyan-glow) !important;
-   }
-   
-   .stAlert {
-       background: var(--bg-card) !important;
-       backdrop-filter: blur(20px) !important;
-       border: 1px solid var(--border-glass) !important;
-       border-radius: var(--card-radius) !important;
-       color: var(--text-secondary) !important;
-   }
-   
-   .stTabs [data-baseweb="tab-list"] {
-       gap: 0 !important;
-       border-bottom: 1px solid var(--border-glass) !important;
-   }
-   .stTabs [data-baseweb="tab"] {
-       font-family: var(--font-mono) !important;
-       font-size: 0.6rem !important;
-       color: var(--text-muted) !important;
-       text-transform: uppercase !important;
-       letter-spacing: 0.08em !important;
-       padding: 0.5rem 1.5rem !important;
-   }
-   .stTabs [data-baseweb="tab"][aria-selected="true"] {
-       color: var(--cyan) !important;
-       border-bottom: 2px solid var(--cyan) !important;
-   }
-   
-   #MainMenu, footer, header { visibility: hidden !important; display: none !important; }
-</style>
-"""
-st.markdown(CYBER_CSS, unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────────────────────
-# LANGUAGES — EN, FR, ES
-# ─────────────────────────────────────────────────────────────
-LANGUAGES = {
-    "en": {
-        "title": "📊 Cyber Betting Terminal",
-        "subtitle": "Real-time Arbitrage & EV Scanner",
-        "live": "LIVE",
-        "active_arbs": "Active Arbs",
-        "avg_roi": "Avg ROI",
-        "bankroll": "Bankroll",
-        "total_bets": "Total Bets",
-        # Add all translations...
-    },
-    "fr": {
-        "title": "📊 Terminal de Paris Cyber",
-        "subtitle": "Scanner d'Arbitrage et EV en temps réel",
-        "live": "EN DIRECT",
-        "active_arbs": "Arbs actifs",
-        "avg_roi": "ROI moyen",
-        "bankroll": "Bankroll",
-        "total_bets": "Total des paris",
-    },
-    "es": {
-        "title": "📊 Terminal de Apuestas Cyber",
-        "subtitle": "Escáner de Arbitraje y EV en tiempo real",
-        "live": "EN VIVO",
-        "active_arbs": "Arbs activos",
-        "avg_roi": "ROI promedio",
-        "bankroll": "Bankroll",
-        "total_bets": "Total apuestas",
-    }
-}
-
-# ─────────────────────────────────────────────────────────────
 # DATABASE — Users
 # ─────────────────────────────────────────────────────────────
 def init_db():
@@ -806,23 +165,6 @@ def update_bet_result(bet_id, result, return_amount, profit_loss):
     conn.commit()
     conn.close()
 
-# ─────────────────────────────────────────────────────────────
-# EV & ARBITRAGE FUNCTIONS
-# ─────────────────────────────────────────────────────────────
-def get_market_average(odds_list):
-    valid = [o for o in odds_list if o > 0]
-    if not valid:
-        return 1.5
-    return sum(1/o for o in valid) / len(valid)
-
-def calculate_true_probability(odds, market_avg):
-    implied = 1 / odds
-    adjustment = 1 - (market_avg - 1) * 0.1
-    return implied * adjustment
-
-def calculate_ev(odds, true_prob):
-    return (true_prob * odds) - 1
-
 def get_bet_summary(bets):
     total = len(bets)
     wins = len([b for b in bets if b[10] == 'Win'])
@@ -838,6 +180,483 @@ def get_bet_summary(bets):
     }
 
 # ─────────────────────────────────────────────────────────────
+# EV FUNCTIONS
+# ─────────────────────────────────────────────────────────────
+def get_market_average(odds_list):
+    valid = [o for o in odds_list if o > 0]
+    if not valid:
+        return 1.5
+    return sum(1/o for o in valid) / len(valid)
+
+def calculate_true_probability(odds, market_avg):
+    implied = 1 / odds
+    adjustment = 1 - (market_avg - 1) * 0.1
+    return implied * adjustment
+
+def calculate_ev(odds, true_prob):
+    return (true_prob * odds) - 1
+
+# ─────────────────────────────────────────────────────────────
+# CYBER CSS
+# ─────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&family=Orbitron:wght@400;500;600;700;800;900&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --bg-deep: #0B0E14;
+    --bg-surface: #0F172A;
+    --bg-card: rgba(255,255,255,0.03);
+    --border-glass: rgba(255,255,255,0.06);
+    --text-primary: #E8EDF5;
+    --text-secondary: #7A8BA0;
+    --text-muted: #3A4A60;
+    --cyan: #00F3FF;
+    --cyan-glow: rgba(0,243,255,0.25);
+    --lime: #39FF14;
+    --lime-glow: rgba(57,255,20,0.2);
+    --orange: #FF6B35;
+    --purple: #7C3AED;
+    --red: #FF3355;
+    --card-radius: 16px;
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-display: 'Orbitron', sans-serif;
+}
+
+html, body, .stApp, .stApp > div, .main, .block-container,
+div[data-testid="stAppViewContainer"],
+div[data-testid="stHeader"],
+section[data-testid="stSidebar"] {
+    background: var(--bg-deep) !important;
+    background-color: var(--bg-deep) !important;
+}
+
+.block-container {
+    padding: 1.5rem 2rem 3rem !important;
+    max-width: 1400px !important;
+}
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--cyan); border-radius: 2px; box-shadow: 0 0 20px var(--cyan-glow); }
+
+/* Top Nav */
+.terminal-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.8rem 1.5rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--card-radius);
+    margin-bottom: 1.5rem;
+    backdrop-filter: blur(20px);
+    position: relative;
+    overflow: hidden;
+}
+.terminal-nav::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--cyan), var(--lime), transparent);
+    animation: scanline 4s ease-in-out infinite;
+}
+@keyframes scanline {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+.terminal-logo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.terminal-logo .icon { font-size: 1.4rem; }
+.terminal-logo .brand {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--cyan), var(--lime));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: 0.12em;
+}
+.terminal-logo .sub {
+    font-family: var(--font-mono);
+    font-size: 0.55rem;
+    color: var(--text-muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+}
+.terminal-status {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+}
+.terminal-status .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--lime);
+    box-shadow: 0 0 20px var(--lime-glow);
+    animation: pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+}
+.terminal-status .live-text { color: var(--lime); font-weight: 600; letter-spacing: 0.08em; }
+.terminal-status .stats { color: var(--text-muted); }
+.terminal-status .stats span { color: var(--text-secondary); font-weight: 600; }
+.terminal-status .user-badge {
+    background: rgba(0,243,255,0.06);
+    border: 1px solid rgba(0,243,255,0.1);
+    border-radius: 20px;
+    padding: 0.2rem 0.8rem;
+    color: var(--cyan);
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+}
+
+/* KPI Grid */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+.kpi-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--card-radius);
+    padding: 1.2rem 1.5rem;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+.kpi-card:hover {
+    border-color: var(--cyan);
+    transform: translateY(-2px);
+}
+.kpi-card .label {
+    font-family: var(--font-mono);
+    font-size: 0.55rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.3rem;
+}
+.kpi-card .value {
+    font-family: var(--font-display);
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.kpi-card .value.cyan { color: var(--cyan); text-shadow: 0 0 30px var(--cyan-glow); }
+.kpi-card .value.lime { color: var(--lime); text-shadow: 0 0 30px var(--lime-glow); }
+.kpi-card .value.orange { color: var(--orange); }
+.kpi-card .value.purple { color: var(--purple); }
+.kpi-card .change { font-family: var(--font-mono); font-size: 0.6rem; margin-top: 0.25rem; }
+.kpi-card .change.positive { color: var(--lime); }
+.kpi-card .change.negative { color: var(--red); }
+
+/* Arb Card */
+.arb-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--card-radius);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 0.75rem;
+    transition: all 0.3s ease;
+}
+.arb-card:hover {
+    border-color: var(--cyan);
+    box-shadow: 0 0 40px rgba(0,243,255,0.04);
+}
+.arb-card .arb-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.arb-card .arb-match .teams {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.arb-card .arb-match .teams .vs { color: var(--text-muted); font-weight: 400; margin: 0 0.3rem; }
+.arb-card .arb-match .meta {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 0.15rem;
+}
+.arb-card .arb-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--lime);
+    background: rgba(57,255,20,0.06);
+    border: 1px solid rgba(57,255,20,0.1);
+    padding: 0.3rem 0.8rem;
+    border-radius: 20px;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+.arb-card .arb-body {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+.arb-card .odds-grid {
+    display: flex;
+    gap: 1.25rem;
+}
+.arb-card .odd-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.3rem 0.8rem;
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px;
+    min-width: 60px;
+}
+.arb-card .odd-cell .odd-label {
+    font-family: var(--font-mono);
+    font-size: 0.5rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.arb-card .odd-cell .odd-value {
+    font-family: var(--font-mono);
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+.arb-card .odd-cell .odd-value.highlight {
+    color: var(--cyan);
+    text-shadow: 0 0 20px var(--cyan-glow);
+}
+.arb-card .arb-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+.arb-card .arb-actions .action-btn {
+    background: rgba(0,243,255,0.06);
+    border: 1px solid rgba(0,243,255,0.1);
+    color: var(--cyan);
+    padding: 0.3rem 0.8rem;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.arb-card .arb-actions .action-btn:hover {
+    background: rgba(0,243,255,0.12);
+    border-color: var(--cyan);
+    box-shadow: 0 0 20px var(--cyan-glow);
+}
+.arb-card .arb-actions .action-btn.primary {
+    background: linear-gradient(135deg, var(--cyan), #0099CC);
+    color: var(--bg-deep);
+    border: none;
+}
+.arb-card .arb-actions .action-btn.primary:hover {
+    box-shadow: 0 0 30px var(--cyan-glow);
+    transform: scale(1.02);
+}
+
+/* Streamlit Overrides */
+.stButton button, div[data-testid="stFormSubmitButton"] button {
+    background: linear-gradient(135deg, var(--cyan), #0099CC) !important;
+    color: var(--bg-deep) !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-family: var(--font-mono) !important;
+    font-weight: 700 !important;
+    font-size: 0.7rem !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase !important;
+    padding: 0.5rem 1.5rem !important;
+    box-shadow: 0 0 20px var(--cyan-glow) !important;
+}
+.stButton button:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 0 40px var(--cyan-glow) !important;
+}
+div[data-testid="metric-container"] {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border-glass) !important;
+    border-radius: var(--card-radius) !important;
+    padding: 0.8rem 1rem !important;
+}
+div[data-testid="metric-label"] {
+    font-family: var(--font-mono) !important;
+    font-size: 0.5rem !important;
+    color: var(--text-muted) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.08em !important;
+}
+div[data-testid="metric-value"] {
+    font-family: var(--font-display) !important;
+    font-size: 1.2rem !important;
+    font-weight: 700 !important;
+    color: var(--text-primary) !important;
+}
+section[data-testid="stSidebar"] {
+    background: var(--bg-surface) !important;
+    border-right: 1px solid var(--border-glass) !important;
+}
+.stTabs [data-baseweb="tab-list"] {
+    gap: 0 !important;
+    border-bottom: 1px solid var(--border-glass) !important;
+}
+.stTabs [data-baseweb="tab"] {
+    font-family: var(--font-mono) !important;
+    font-size: 0.6rem !important;
+    color: var(--text-muted) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.08em !important;
+    padding: 0.5rem 1.5rem !important;
+}
+.stTabs [data-baseweb="tab"][aria-selected="true"] {
+    color: var(--cyan) !important;
+    border-bottom: 2px solid var(--cyan) !important;
+}
+div[data-testid="stTextInput"] input {
+    background: rgba(0,0,0,0.3) !important;
+    border: 1px solid var(--border-glass) !important;
+    border-radius: 8px !important;
+    color: var(--text-primary) !important;
+}
+#MainMenu, footer, header { visibility: hidden !important; display: none !important; }
+</style>
+""", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────
+# LANGUAGES
+# ─────────────────────────────────────────────────────────────
+LANGUAGES = {
+    "en": {
+        "title": "📊 Cyber Betting Terminal",
+        "subtitle": "Real-time Arbitrage & EV Scanner",
+        "live": "LIVE",
+        "active_arbs": "Active Arbs",
+        "avg_roi": "Avg ROI",
+        "bankroll": "Bankroll",
+        "total_bets": "Total Bets",
+        "signup_title": "🚀 Create Your Account",
+        "signup_subtitle": "Start your **7-day free trial**. No credit card required.",
+        "login_title": "🔐 Welcome Back",
+        "free_trial": "🚀 Start Free Trial",
+        "free_trial_note": "🆓 7-day free trial · Then $1.99/month",
+        "already_account": "🔐 Already have an account? Log In",
+        "create_account": "📝 Create an account",
+        "name": "Full Name",
+        "email": "Email",
+        "password": "Password",
+        "confirm": "Confirm Password",
+        "sign_in": "Sign In",
+        "signup_error": "All fields are required.",
+        "password_mismatch": "Passwords do not match.",
+        "password_short": "Password must be at least 6 characters.",
+        "account_created": "✅ Account created! You can now log in.",
+        "email_exists": "Email already registered. Please log in.",
+        "login_error": "Invalid email or password.",
+        "footer": f"{COMPANY_NAME} · {DOMAIN} · {YEAR}",
+        "lang_en": "🇬🇧 EN",
+        "lang_fr": "🇫🇷 FR",
+        "lang_es": "🇪🇸 ES"
+    },
+    "fr": {
+        "title": "📊 Terminal de Paris Cyber",
+        "subtitle": "Scanner d'Arbitrage et EV en temps réel",
+        "live": "EN DIRECT",
+        "active_arbs": "Arbs actifs",
+        "avg_roi": "ROI moyen",
+        "bankroll": "Bankroll",
+        "total_bets": "Total des paris",
+        "signup_title": "🚀 Créez Votre Compte",
+        "signup_subtitle": "Commencez votre **essai gratuit de 7 jours**. Aucune carte de crédit requise.",
+        "login_title": "🔐 Bon Retour",
+        "free_trial": "🚀 Essai Gratuit",
+        "free_trial_note": "🆓 Essai gratuit de 7 jours · Puis 1,99 $/mois",
+        "already_account": "🔐 Déjà un compte? Se connecter",
+        "create_account": "📝 Créer un compte",
+        "name": "Nom complet",
+        "email": "Courriel",
+        "password": "Mot de passe",
+        "confirm": "Confirmer le mot de passe",
+        "sign_in": "Se connecter",
+        "signup_error": "Tous les champs sont requis.",
+        "password_mismatch": "Les mots de passe ne correspondent pas.",
+        "password_short": "Le mot de passe doit contenir au moins 6 caractères.",
+        "account_created": "✅ Compte créé! Vous pouvez maintenant vous connecter.",
+        "email_exists": "Courriel déjà enregistré. Veuillez vous connecter.",
+        "login_error": "Courriel ou mot de passe incorrect.",
+        "footer": f"{COMPANY_NAME} · {DOMAIN} · {YEAR}",
+        "lang_en": "🇬🇧 EN",
+        "lang_fr": "🇫🇷 FR",
+        "lang_es": "🇪🇸 ES"
+    },
+    "es": {
+        "title": "📊 Terminal de Apuestas Cyber",
+        "subtitle": "Escáner de Arbitraje y EV en tiempo real",
+        "live": "EN VIVO",
+        "active_arbs": "Arbs activos",
+        "avg_roi": "ROI promedio",
+        "bankroll": "Bankroll",
+        "total_bets": "Total apuestas",
+        "signup_title": "🚀 Crea Tu Cuenta",
+        "signup_subtitle": "Comienza tu **prueba gratuita de 7 días**. Sin tarjeta de crédito.",
+        "login_title": "🔐 Bienvenido de Vuelta",
+        "free_trial": "🚀 Prueba Gratis",
+        "free_trial_note": "🆓 Prueba gratis de 7 días · Luego $1.99/mes",
+        "already_account": "🔐 ¿Ya tienes cuenta? Iniciar sesión",
+        "create_account": "📝 Crear una cuenta",
+        "name": "Nombre completo",
+        "email": "Correo",
+        "password": "Contraseña",
+        "confirm": "Confirmar contraseña",
+        "sign_in": "Iniciar sesión",
+        "signup_error": "Todos los campos son obligatorios.",
+        "password_mismatch": "Las contraseñas no coinciden.",
+        "password_short": "La contraseña debe tener al menos 6 caracteres.",
+        "account_created": "✅ ¡Cuenta creada! Ahora puedes iniciar sesión.",
+        "email_exists": "Correo ya registrado. Por favor inicia sesión.",
+        "login_error": "Correo o contraseña incorrectos.",
+        "footer": f"{COMPANY_NAME} · {DOMAIN} · {YEAR}",
+        "lang_en": "🇬🇧 EN",
+        "lang_fr": "🇫🇷 FR",
+        "lang_es": "🇪🇸 ES"
+    }
+}
+
+# ─────────────────────────────────────────────────────────────
 # LANDING PAGE
 # ─────────────────────────────────────────────────────────────
 def landing_page():
@@ -847,32 +666,29 @@ def landing_page():
     # Language toggle
     col_lang1, col_lang2, col_lang3, col_lang4 = st.columns([8, 0.8, 0.8, 0.8])
     with col_lang2:
-        if st.button("🇬🇧 EN", key="lang_en_landing"):
+        if st.button(t['lang_en'], key="lang_en_landing"):
             st.session_state.lang = "en"
             st.rerun()
     with col_lang3:
-        if st.button("🇫🇷 FR", key="lang_fr_landing"):
+        if st.button(t['lang_fr'], key="lang_fr_landing"):
             st.session_state.lang = "fr"
             st.rerun()
     with col_lang4:
-        if st.button("🇪🇸 ES", key="lang_es_landing"):
+        if st.button(t['lang_es'], key="lang_es_landing"):
             st.session_state.lang = "es"
             st.rerun()
     
-    # Hero Section
     st.markdown(f"""
-    <div style="text-align:center; padding:4rem 2rem; background:var(--bg-surface); border-radius:20px; border:1px solid var(--border-glass); margin-bottom:2rem; position:relative; overflow:hidden;">
-        <div style="position:absolute; top:-50%; left:-50%; width:200%; height:200%; background:radial-gradient(circle at 50% 50%, rgba(0,243,255,0.03) 0%, transparent 70%); pointer-events:none;"></div>
-        <h1 style="font-family:var(--font-display); font-size:3rem; font-weight:800; background:linear-gradient(135deg, var(--cyan), var(--lime)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:0.5rem;">⚡ {t['title']}</h1>
-        <p style="color:var(--text-secondary); font-size:1.2rem; max-width:600px; margin:0 auto;">{t['subtitle']}</p>
-        <div style="margin-top:1.5rem; display:flex; justify-content:center; gap:0.5rem; flex-wrap:wrap;">
-            <span style="background:rgba(0,243,255,0.06); border:1px solid rgba(0,243,255,0.1); padding:0.3rem 1rem; border-radius:20px; color:var(--cyan); font-size:0.7rem; font-family:var(--font-mono);">🆓 7-day free trial</span>
-            <span style="background:rgba(57,255,20,0.04); border:1px solid rgba(57,255,20,0.06); padding:0.3rem 1rem; border-radius:20px; color:var(--lime); font-size:0.7rem; font-family:var(--font-mono);">⚡ {t['live']}</span>
+    <div style="text-align:center; padding:3rem 2rem; background:var(--bg-surface); border-radius:20px; border:1px solid var(--border-glass); margin-bottom:2rem;">
+        <h1 style="font-family:var(--font-display); font-size:2.8rem; font-weight:800; background:linear-gradient(135deg, var(--cyan), var(--lime)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:0.5rem;">⚡ {t['title']}</h1>
+        <p style="color:var(--text-secondary); font-size:1.1rem;">{t['subtitle']}</p>
+        <div style="margin-top:1rem; display:flex; justify-content:center; gap:0.5rem; flex-wrap:wrap;">
+            <span style="background:rgba(0,243,255,0.06); border:1px solid rgba(0,243,255,0.1); padding:0.3rem 1rem; border-radius:20px; color:var(--cyan); font-size:0.7rem;">🆓 7-day free trial</span>
+            <span style="background:rgba(57,255,20,0.04); border:1px solid rgba(57,255,20,0.06); padding:0.3rem 1rem; border-radius:20px; color:var(--lime); font-size:0.7rem;">⚡ {t['live']}</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
     
-    # Features
     col1, col2, col3 = st.columns(3)
     features = [
         ("🎯", "EV Scanner", "Find positive expected value bets automatically"),
@@ -882,21 +698,19 @@ def landing_page():
     for col, (icon, title, desc) in zip([col1, col2, col3], features):
         with col:
             st.markdown(f"""
-            <div style="background:var(--bg-card); backdrop-filter:blur(20px); border:1px solid var(--border-glass); border-radius:var(--card-radius); padding:1.5rem; text-align:center; transition:all var(--transition-speed) ease;">
+            <div style="background:var(--bg-card); backdrop-filter:blur(20px); border:1px solid var(--border-glass); border-radius:var(--card-radius); padding:1.5rem; text-align:center;">
                 <div style="font-size:2.5rem; margin-bottom:0.5rem;">{icon}</div>
                 <h3 style="color:var(--text-primary); font-size:1rem;">{title}</h3>
                 <p style="color:var(--text-muted); font-size:0.8rem;">{desc}</p>
             </div>
             """, unsafe_allow_html=True)
     
-    # Pricing
     st.markdown("---")
-    st.markdown("### 💰 Simple Pricing")
     
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
         st.markdown("""
-        <div style="background:var(--bg-card); backdrop-filter:blur(20px); border:1px solid var(--border-glass); border-radius:var(--card-radius); padding:2rem; text-align:center;">
+        <div style="background:var(--bg-card); border:1px solid var(--border-glass); border-radius:var(--card-radius); padding:2rem; text-align:center;">
             <div style="background:linear-gradient(135deg, var(--cyan), var(--lime)); color:#0B0E14; padding:0.3rem 1rem; border-radius:20px; font-size:0.7rem; font-weight:700; display:inline-block; margin-bottom:0.5rem;">🔥 Most Popular</div>
             <h2 style="color:var(--text-primary); margin:0;">Monthly</h2>
             <div style="font-family:var(--font-display); font-size:3.5rem; font-weight:700; color:var(--cyan);">$1.99</div>
@@ -911,19 +725,19 @@ def landing_page():
         </div>
         """, unsafe_allow_html=True)
         
-        if st.button("🚀 Start Free Trial", use_container_width=True, type="primary"):
+        if st.button(t['free_trial'], use_container_width=True, type="primary"):
             st.session_state.show_signup = True
             st.rerun()
         
-        st.markdown("""
+        st.markdown(f"""
         <div style="text-align:center; color:var(--text-muted); font-size:0.7rem; padding:0.5rem 0;">
-            🆓 7-day free trial · Then $1.99/month
+            {t['free_trial_note']}
         </div>
         """, unsafe_allow_html=True)
     
     st.markdown(f"""
     <div style="text-align:center; color:var(--text-muted); font-size:0.7rem; padding:2rem 0; border-top:1px solid var(--border-glass); margin-top:1rem;">
-        {COMPANY_NAME} · {DOMAIN} · {YEAR}
+        {t['footer']}
     </div>
     """, unsafe_allow_html=True)
 
@@ -936,44 +750,44 @@ def signup_page():
     
     col_lang1, col_lang2, col_lang3, col_lang4 = st.columns([8, 0.8, 0.8, 0.8])
     with col_lang2:
-        if st.button("🇬🇧 EN", key="lang_en_signup"):
+        if st.button(t['lang_en'], key="lang_en_signup"):
             st.session_state.lang = "en"
             st.rerun()
     with col_lang3:
-        if st.button("🇫🇷 FR", key="lang_fr_signup"):
+        if st.button(t['lang_fr'], key="lang_fr_signup"):
             st.session_state.lang = "fr"
             st.rerun()
     with col_lang4:
-        if st.button("🇪🇸 ES", key="lang_es_signup"):
+        if st.button(t['lang_es'], key="lang_es_signup"):
             st.session_state.lang = "es"
             st.rerun()
     
-    st.markdown(f"### 🚀 Create Your Account")
-    st.markdown("Start your **7-day free trial**. No credit card required.")
+    st.markdown(f"### {t['signup_title']}")
+    st.markdown(t['signup_subtitle'])
     
     with st.form("signup_form"):
-        name = st.text_input("Full Name", placeholder="John Doe")
-        email = st.text_input("Email", placeholder="you@example.com")
-        password = st.text_input("Password", type="password", placeholder="••••••••")
-        confirm = st.text_input("Confirm Password", type="password", placeholder="••••••••")
+        name = st.text_input(t['name'], placeholder="John Doe")
+        email = st.text_input(t['email'], placeholder="you@example.com")
+        password = st.text_input(t['password'], type="password", placeholder="••••••••")
+        confirm = st.text_input(t['confirm'], type="password", placeholder="••••••••")
         
-        if st.form_submit_button("Start Free Trial", use_container_width=True, type="primary"):
+        if st.form_submit_button(t['free_trial'], use_container_width=True, type="primary"):
             if not name or not email or not password:
-                st.error("All fields are required.")
+                st.error(t['signup_error'])
             elif password != confirm:
-                st.error("Passwords do not match.")
+                st.error(t['password_mismatch'])
             elif len(password) < 6:
-                st.error("Password must be at least 6 characters.")
+                st.error(t['password_short'])
             else:
                 if create_user(email, password, name):
-                    st.success("✅ Account created! You can now log in.")
+                    st.success(t['account_created'])
                     st.session_state.show_login = True
                     st.rerun()
                 else:
-                    st.error("Email already registered. Please log in.")
+                    st.error(t['email_exists'])
     
     st.markdown("---")
-    if st.button("🔐 Already have an account? Log In", use_container_width=True):
+    if st.button(t['already_account'], use_container_width=True):
         st.session_state.show_login = True
         st.rerun()
 
@@ -986,25 +800,25 @@ def login_page():
     
     col_lang1, col_lang2, col_lang3, col_lang4 = st.columns([8, 0.8, 0.8, 0.8])
     with col_lang2:
-        if st.button("🇬🇧 EN", key="lang_en_login"):
+        if st.button(t['lang_en'], key="lang_en_login"):
             st.session_state.lang = "en"
             st.rerun()
     with col_lang3:
-        if st.button("🇫🇷 FR", key="lang_fr_login"):
+        if st.button(t['lang_fr'], key="lang_fr_login"):
             st.session_state.lang = "fr"
             st.rerun()
     with col_lang4:
-        if st.button("🇪🇸 ES", key="lang_es_login"):
+        if st.button(t['lang_es'], key="lang_es_login"):
             st.session_state.lang = "es"
             st.rerun()
     
-    st.markdown(f"### 🔐 Welcome Back")
+    st.markdown(f"### {t['login_title']}")
     
     with st.form("login_form"):
-        email = st.text_input("Email", placeholder="you@example.com")
-        password = st.text_input("Password", type="password", placeholder="••••••••")
+        email = st.text_input(t['email'], placeholder="you@example.com")
+        password = st.text_input(t['password'], type="password", placeholder="••••••••")
         
-        if st.form_submit_button("Sign In", use_container_width=True, type="primary"):
+        if st.form_submit_button(t['sign_in'], use_container_width=True, type="primary"):
             user = authenticate_user(email, password)
             if user:
                 st.session_state.authenticated = True
@@ -1014,10 +828,10 @@ def login_page():
                 st.session_state.is_admin = user[6] if len(user) > 6 else 0
                 st.rerun()
             else:
-                st.error("Invalid email or password.")
+                st.error(t['login_error'])
     
     st.markdown("---")
-    if st.button("📝 Create an account", use_container_width=True):
+    if st.button(t['create_account'], use_container_width=True):
         st.session_state.show_signup = True
         st.rerun()
 
@@ -1037,15 +851,15 @@ def dashboard():
     # Language toggle
     col_lang1, col_lang2, col_lang3, col_lang4 = st.columns([8, 0.8, 0.8, 0.8])
     with col_lang2:
-        if st.button("🇬🇧 EN", key="lang_en_dash"):
+        if st.button(t['lang_en'], key="lang_en_dash"):
             st.session_state.lang = "en"
             st.rerun()
     with col_lang3:
-        if st.button("🇫🇷 FR", key="lang_fr_dash"):
+        if st.button(t['lang_fr'], key="lang_fr_dash"):
             st.session_state.lang = "fr"
             st.rerun()
     with col_lang4:
-        if st.button("🇪🇸 ES", key="lang_es_dash"):
+        if st.button(t['lang_es'], key="lang_es_dash"):
             st.session_state.lang = "es"
             st.rerun()
     
@@ -1056,7 +870,7 @@ def dashboard():
             <span class="icon">⚡</span>
             <div>
                 <span class="brand">CYBER TERMINAL</span>
-                <div class="sub">{st.session_state.user_name} · {st.session_state.user_role.upper()}</div>
+                <div class="sub">{st.session_state.user_name} · {'ADMIN' if st.session_state.is_admin else 'USER'}</div>
             </div>
         </div>
         <div class="terminal-status">
@@ -1097,7 +911,7 @@ def dashboard():
             <div class="kpi-card">
                 <div class="label">Bankroll</div>
                 <div class="value orange">${1000 + profit:.2f}</div>
-                <div class="change {('positive' if profit > 0 else 'negative')}">{'+' if profit > 0 else ''}{profit:.2f}</div>
+                <div class="change {'positive' if profit > 0 else 'negative'}">{'+' if profit > 0 else ''}{profit:.2f}</div>
             </div>
             <div class="kpi-card">
                 <div class="label">Total Bets</div>
@@ -1141,56 +955,11 @@ def dashboard():
         if st.button("🔍 Scan Now", use_container_width=True, type="primary"):
             with st.spinner("Scanning 70+ bookmakers..."):
                 sample_bets = [
-                    {
-                        'match': 'Arsenal vs Coventry',
-                        'outcome': 'Draw',
-                        'odds': 8.20,
-                        'ev_percent': 8.0,
-                        'true_prob': 13.2,
-                        'stake': 5.00,
-                        'potential_return': 41.00,
-                        'book': 'Betfair'
-                    },
-                    {
-                        'match': 'Everton vs Crystal Palace',
-                        'outcome': 'Everton',
-                        'odds': 2.14,
-                        'ev_percent': 8.0,
-                        'true_prob': 50.5,
-                        'stake': 17.54,
-                        'potential_return': 37.54,
-                        'book': 'Pinnacle'
-                    },
-                    {
-                        'match': 'Ipswich vs Sunderland',
-                        'outcome': 'Draw',
-                        'odds': 3.44,
-                        'ev_percent': 8.0,
-                        'true_prob': 31.4,
-                        'stake': 8.20,
-                        'potential_return': 28.20,
-                        'book': 'Bet365'
-                    },
-                    {
-                        'match': 'Hull City vs Man Utd',
-                        'outcome': 'Hull City',
-                        'odds': 6.88,
-                        'ev_percent': 8.0,
-                        'true_prob': 15.7,
-                        'stake': 5.00,
-                        'potential_return': 34.40,
-                        'book': 'Pinnacle'
-                    },
-                    {
-                        'match': 'Brentford vs Spurs',
-                        'outcome': 'Spurs',
-                        'odds': 2.99,
-                        'ev_percent': 8.0,
-                        'true_prob': 36.1,
-                        'stake': 10.05,
-                        'potential_return': 30.05,
-                        'book': 'Betfair'
-                    }
+                    {'match': 'Arsenal vs Coventry', 'outcome': 'Draw', 'odds': 8.20, 'ev_percent': 8.0, 'true_prob': 13.2, 'stake': 5.00, 'potential_return': 41.00, 'book': 'Betfair'},
+                    {'match': 'Everton vs Crystal Palace', 'outcome': 'Everton', 'odds': 2.14, 'ev_percent': 8.0, 'true_prob': 50.5, 'stake': 17.54, 'potential_return': 37.54, 'book': 'Pinnacle'},
+                    {'match': 'Ipswich vs Sunderland', 'outcome': 'Draw', 'odds': 3.44, 'ev_percent': 8.0, 'true_prob': 31.4, 'stake': 8.20, 'potential_return': 28.20, 'book': 'Bet365'},
+                    {'match': 'Hull City vs Man Utd', 'outcome': 'Hull City', 'odds': 6.88, 'ev_percent': 8.0, 'true_prob': 15.7, 'stake': 5.00, 'potential_return': 34.40, 'book': 'Pinnacle'},
+                    {'match': 'Brentford vs Spurs', 'outcome': 'Spurs', 'odds': 2.99, 'ev_percent': 8.0, 'true_prob': 36.1, 'stake': 10.05, 'potential_return': 30.05, 'book': 'Betfair'}
                 ]
                 
                 for bet in sample_bets:
@@ -1211,7 +980,6 @@ def dashboard():
                 st.success(f"✅ Found {len(sample_bets)} EV bets!")
                 st.rerun()
         
-        # Display results with cyber cards
         if 'scan_results' in st.session_state and st.session_state.scan_results:
             st.markdown("### 🎯 Best EV Bets")
             
@@ -1230,22 +998,10 @@ def dashboard():
                     </div>
                     <div class="arb-body">
                         <div class="odds-grid">
-                            <div class="odd-cell">
-                                <span class="odd-label">Bet</span>
-                                <span class="odd-value highlight">{bet['outcome']}</span>
-                            </div>
-                            <div class="odd-cell">
-                                <span class="odd-label">Odds</span>
-                                <span class="odd-value">{bet['odds']}</span>
-                            </div>
-                            <div class="odd-cell">
-                                <span class="odd-label">Stake</span>
-                                <span class="odd-value">${bet['stake']:.2f}</span>
-                            </div>
-                            <div class="odd-cell">
-                                <span class="odd-label">Return</span>
-                                <span class="odd-value" style="color:var(--lime);">${bet['potential_return']:.2f}</span>
-                            </div>
+                            <div class="odd-cell"><span class="odd-label">Bet</span><span class="odd-value highlight">{bet['outcome']}</span></div>
+                            <div class="odd-cell"><span class="odd-label">Odds</span><span class="odd-value">{bet['odds']}</span></div>
+                            <div class="odd-cell"><span class="odd-label">Stake</span><span class="odd-value">${bet['stake']:.2f}</span></div>
+                            <div class="odd-cell"><span class="odd-label">Return</span><span class="odd-value" style="color:var(--lime);">${bet['potential_return']:.2f}</span></div>
                         </div>
                         <div class="arb-actions">
                             <button class="action-btn primary">📄 Slip</button>
