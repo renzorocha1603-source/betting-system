@@ -1203,7 +1203,18 @@ SCAN_MATCHES = [
 ]
 SCAN_BOOKS = ['Betfair', 'Pinnacle', 'Bet365', 'NordicBet', 'Coolbet', 'Unibet']
 
-def generate_ev_bets(count, target_stake, min_ev):
+def kelly_stake(fair_prob, odds, bankroll, kelly_fraction, min_stake=5.0, max_bankroll_pct=0.10):
+    """Fractional Kelly: f* = (p*odds - 1) / (odds - 1), scaled by kelly_fraction
+    (e.g. 0.25 = quarter-Kelly) and capped at max_bankroll_pct of bankroll so a
+    single high-odds pick can't demand a wildly oversized stake."""
+    if odds <= 1:
+        return min_stake
+    full_kelly = max(0.0, (fair_prob * odds - 1) / (odds - 1))
+    stake = bankroll * kelly_fraction * full_kelly
+    stake = min(stake, bankroll * max_bankroll_pct)
+    return round(max(min_stake, stake), 2)
+
+def generate_ev_bets(count, target_stake, min_ev, bankroll=None, kelly_fraction=None):
     """Directional value bets: one side, one bookmaker, positive expected value.
     Stake is sized as a modest slice of the bankroll the user entered, not the
     whole amount, and odds/EV are independent of each other on purpose —
@@ -1219,8 +1230,12 @@ def generate_ev_bets(count, target_stake, min_ev):
         ev = random.choice(ev_options)
         outcome = random.choice(outcomes)
         book = random.choice(SCAN_BOOKS)
+        fair_prob = (1 / odds) * (1 + ev / 100)
 
-        stake = round(max(5.0, target_stake * random.uniform(0.05, 0.15)), 2)
+        if kelly_fraction and bankroll:
+            stake = kelly_stake(fair_prob, odds, bankroll, kelly_fraction)
+        else:
+            stake = round(max(5.0, target_stake * random.uniform(0.05, 0.15)), 2)
         potential_return = round(stake * odds, 2)
 
         bets.append({
@@ -1229,7 +1244,7 @@ def generate_ev_bets(count, target_stake, min_ev):
             'outcome': outcome,
             'odds': odds,
             'ev_percent': ev,
-            'true_prob': round((1 / odds) * 100 * (1 + ev / 100), 1),
+            'true_prob': round(fair_prob * 100, 1),
             'stake': stake,
             'potential_return': potential_return,
             'book': book
@@ -1344,7 +1359,7 @@ MIN_BOOKS_FOR_SIGNAL = 4      # too few quotes = consensus isn't trustworthy
 MAX_PLAUSIBLE_EV_PERCENT = 20  # real markets essentially never leave more than this on the table;
                                 # higher usually means a stale/mispriced outlier, not a real edge
 
-def find_live_ev_bets(events, min_ev_percent, target_stake):
+def find_live_ev_bets(events, min_ev_percent, target_stake, bankroll=None, kelly_fraction=None):
     """De-vigs every OTHER bookmaker's line (leave-one-out — a book's own price
     never counts toward its own 'fair value') to build a consensus per outcome,
     then flags a price that beats that consensus by at least min_ev_percent.
@@ -1382,7 +1397,10 @@ def find_live_ev_bets(events, min_ev_percent, target_stake):
             fair_prob = sum(other_probs) / len(other_probs)
             ev_percent = ((fair_prob * price) - 1) * 100
             if min_ev_percent <= ev_percent <= MAX_PLAUSIBLE_EV_PERCENT:
-                stake = round(max(5.0, target_stake * random.uniform(0.05, 0.15)), 2)
+                if kelly_fraction and bankroll:
+                    stake = kelly_stake(fair_prob, price, bankroll, kelly_fraction)
+                else:
+                    stake = round(max(5.0, target_stake * random.uniform(0.05, 0.15)), 2)
                 results.append({
                     'type': 'ev', 'source': 'live',
                     'match': f"{home} vs {away}", 'outcome': name,
@@ -1614,7 +1632,7 @@ def dashboard():
             if sports_err:
                 st.caption(f"⚠️ Couldn't load your key's full sport list ({sports_err}) — showing a small fallback set.")
 
-        col0, col1, col2, col3 = st.columns(4)
+        col0, col1, col2 = st.columns(3)
         with col0:
             sport_label = st.selectbox("Sport / League", list(sport_options.keys()))
             sport_key = sport_options[sport_label]
@@ -1622,8 +1640,29 @@ def dashboard():
             scan_mode = st.selectbox(t['mode'], [t['ev_mode'], t['arbitrage_mode'], t['both_mode']])
         with col2:
             min_ev = st.slider(t['min_ev'], 1, 20, 5, 1)
-        with col3:
-            target_stake = st.number_input(t['stake_label'], min_value=10, value=100, step=10)
+
+        st.markdown(f"**Stake Sizing** — bankroll: ${bankroll_base:,.2f}")
+        col_s0, col_s1 = st.columns(2)
+        with col_s0:
+            sizing_mode = st.selectbox(
+                "Method",
+                ["% of Bankroll", "Kelly (EV bets)", "Fixed $ Amount"],
+                key="sizing_mode_select",
+                label_visibility="collapsed"
+            )
+        kelly_fraction = None
+        with col_s1:
+            if sizing_mode == "% of Bankroll":
+                pct = st.slider("% per bet", 0.5, 10.0, 2.0, 0.5, key="pct_bankroll", label_visibility="collapsed")
+                target_stake = round(bankroll_base * pct / 100, 2)
+                st.caption(f"≈ ${target_stake:,.2f} per bet")
+            elif sizing_mode == "Kelly (EV bets)":
+                kelly_pct = st.slider("Kelly fraction (%)", 5, 100, 25, 5, key="kelly_pct", label_visibility="collapsed")
+                kelly_fraction = kelly_pct / 100
+                target_stake = round(bankroll_base * 0.03, 2)  # baseline used only for arbitrage legs
+                st.caption(f"Quarter-Kelly ≈ safer · Full Kelly ≈ aggressive. Arb legs still sized at ~3% of bankroll.")
+            else:
+                target_stake = st.number_input("Fixed $", min_value=10.0, value=100.0, step=10.0, key="fixed_stake", label_visibility="collapsed")
 
         if not ODDS_API_KEY:
             st.warning("⚠️ No live Odds API key detected in secrets — scans will use simulated demo data instead of real bookmaker odds.")
@@ -1638,19 +1677,19 @@ def dashboard():
                 if events is not None:
                     data_source = "live"
                     if scan_mode == t['ev_mode']:
-                        results = find_live_ev_bets(events, min_ev, target_stake)
+                        results = find_live_ev_bets(events, min_ev, target_stake, bankroll_base, kelly_fraction)
                     elif scan_mode == t['arbitrage_mode']:
                         results = find_live_arbitrage(events, target_stake)
                     else:
-                        results = find_live_ev_bets(events, min_ev, target_stake) + find_live_arbitrage(events, target_stake)
+                        results = find_live_ev_bets(events, min_ev, target_stake, bankroll_base, kelly_fraction) + find_live_arbitrage(events, target_stake)
                 else:
                     live_error = err
                     if scan_mode == t['ev_mode']:
-                        results = generate_ev_bets(5, target_stake, min_ev)
+                        results = generate_ev_bets(5, target_stake, min_ev, bankroll_base, kelly_fraction)
                     elif scan_mode == t['arbitrage_mode']:
                         results = generate_arbitrage_opportunities(4, target_stake)
                     else:  # Both
-                        results = generate_ev_bets(3, target_stake, min_ev) + generate_arbitrage_opportunities(2, target_stake)
+                        results = generate_ev_bets(3, target_stake, min_ev, bankroll_base, kelly_fraction) + generate_arbitrage_opportunities(2, target_stake)
 
                 for item in results:
                     if item['type'] == 'ev':
@@ -1757,7 +1796,7 @@ For a **true arbitrage** opportunity, there's no "if it wins" — you stake acro
                         <div class="arb-header">
                             <div class="arb-match">
                                 <div class="teams">#{i} {item['match'].replace(' vs ', ' <span class="vs">vs</span> ')}</div>
-                                <div class="meta">Split across {len(item['legs'])} bookmakers · guaranteed regardless of result</div>
+                                <div class="meta">{' · '.join(sorted(set(l['book'] for l in item['legs'])))} — guaranteed regardless of result</div>
                             </div>
                             <div class="arb-badge">🔒 +{item['profit_percent']:.1f}% Guaranteed</div>
                         </div>
